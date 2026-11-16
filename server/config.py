@@ -155,6 +155,10 @@ DEFAULTS = {
         "preroll_ms": 300,          # audio kept from before the channel went busy
         "hang_ms": 700,             # an over ends after the channel is quiet this long
         "tail_ms": 0,               # cut this much off the end of every over: a repeater's tail
+        "quality": {                # how scratchy an over is (bot/quality.py): poor ones aren't learned from
+            "rough_snr_db": 25, "poor_snr_db": 12,      # speech over the hiss floor
+            "rough_crackle": 0.05, "poor_crackle": 0.2,  # share of 20 ms frames with a click
+        },
         "reply_gap_ms": 1500,       # the channel must be quiet this long before it keys up
         "talk_over": False,         # start-up setting of the web page's "Talk over people" box:
                                     # true = key up as soon as a reply is ready, busy channel or not

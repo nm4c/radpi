@@ -7,7 +7,8 @@ Backends (bot.stt.backend):
                   LocalAI, or a Whisper server on the AI HAT+ 2 that offers that API.
   mock            canned phrases, for trying the rest of the agent without a model.
 
-transcribe(samples, hint) takes float32 audio at 16 kHz; hint is extra vocabulary (known names).
+transcribe(samples, hint, lenient) takes float32 audio at 16 kHz; hint is extra vocabulary (known
+names); lenient is set for scratchy overs (quality.py) so hiss doesn't get real words filtered out.
 Blocking backends run in a worker thread (see agent.py); the HTTP one is async.
 
 Whisper makes things up when there's no speech to hear: squelch noise, a carrier, the tail of an
@@ -71,11 +72,13 @@ def _unloop(text):
     return " ".join(out)
 
 
-def keep_segment(seg):
-    """Whisper's own opinion of one segment (a dict or an object with the usual fields)."""
+def keep_segment(seg, lenient=False):
+    """Whisper's own opinion of one segment (a dict or an object with the usual fields).
+    lenient (a scratchy over, see quality.py): hiss makes Whisper doubt real speech, so only
+    repetition loops are dropped."""
     get = seg.get if isinstance(seg, dict) else lambda k, d=None: getattr(seg, k, d)
     no_speech, logprob = get("no_speech_prob", 0.0) or 0.0, get("avg_logprob", 0.0) or 0.0
-    if no_speech > NO_SPEECH and logprob < LOW_LOGPROB:
+    if not lenient and no_speech > NO_SPEECH and logprob < LOW_LOGPROB:
         return False
     return (get("compression_ratio", 0.0) or 0.0) <= MAX_COMPRESSION
 
@@ -107,14 +110,14 @@ class FasterWhisper:
         log.info("loading Whisper model %s (%s)", cfg["model"], cfg["compute_type"])
         self.model = WhisperModel(cfg["model"], device="cpu", compute_type=cfg["compute_type"])
 
-    def transcribe(self, samples, hint=""):
+    def transcribe(self, samples, hint="", lenient=False):
         prompt = " ".join(p for p in (self.cfg["prompt"], hint) if p) or None
         filt = self.cfg["filter"]
         segments, _ = self.model.transcribe(
             samples, language=self.cfg["language"] or None, beam_size=int(self.cfg["beam_size"]),
-            initial_prompt=prompt, condition_on_previous_text=False, vad_filter=bool(filt),
+            initial_prompt=prompt, condition_on_previous_text=False, vad_filter=bool(filt) and not lenient,
             temperature=0.0)
-        text = " ".join(s.text.strip() for s in segments if not filt or keep_segment(s)).strip()
+        text = " ".join(s.text.strip() for s in segments if not filt or keep_segment(s, lenient)).strip()
         return tidy(text, len(samples) / 16000, prompt or "", self.cfg["language"]) if filt else text
 
 
@@ -130,7 +133,7 @@ class OpenAITranscribe:
         # only answer in plain json; Speaches and the like take both.
         self.extras = self.filter and "api.openai.com" not in self.url
 
-    async def _post(self, samples, prompt, extras):
+    async def _post(self, samples, prompt, extras, vad=True):
         form = aiohttp.FormData()
         form.add_field("file", wav_bytes(to_pcm(samples), self.rate), filename="over.wav", content_type="audio/wav")
         form.add_field("model", self.cfg["model"])
@@ -141,7 +144,7 @@ class OpenAITranscribe:
             form.add_field("prompt", prompt)
         if extras:
             form.add_field("response_format", "verbose_json")
-            form.add_field("vad_filter", "true")
+            form.add_field("vad_filter", "true" if vad else "false")
         headers = {"Authorization": f"Bearer {self.cfg['api_key']}"} if self.cfg["api_key"] else {}
         timeout = aiohttp.ClientTimeout(total=60)
         async with aiohttp.ClientSession(timeout=timeout) as s:
@@ -150,11 +153,11 @@ class OpenAITranscribe:
                     raise RuntimeError(f"transcription server: HTTP {r.status} {(await r.text())[:200]}")
                 return await r.json()
 
-    async def transcribe(self, samples, hint=""):
+    async def transcribe(self, samples, hint="", lenient=False):
         prompt = " ".join(p for p in (self.cfg["prompt"], hint) if p)
         if self.extras:
             try:
-                data = await self._post(samples, prompt, True)
+                data = await self._post(samples, prompt, True, vad=not lenient)
             except RuntimeError as e:
                 if "HTTP 4" not in str(e):
                     raise
@@ -166,7 +169,7 @@ class OpenAITranscribe:
             data = await self._post(samples, prompt, False)
         segments = data.get("segments")
         if self.filter and segments:
-            text = " ".join((sg.get("text") or "").strip() for sg in segments if keep_segment(sg))
+            text = " ".join((sg.get("text") or "").strip() for sg in segments if keep_segment(sg, lenient))
         else:
             text = data.get("text") or ""
         text = text.strip()
@@ -187,7 +190,7 @@ class MockSTT:
     def __init__(self, cfg=None):
         self.rng = random.Random(1)
 
-    def transcribe(self, samples, hint=""):
+    def transcribe(self, samples, hint="", lenient=False):
         return self.rng.choice(self.LINES)
 
 

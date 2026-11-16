@@ -232,6 +232,13 @@ bot:
   split_overs: true        # cut an over where the voice changes (stations keying up back to back)
   tail_ms: 0               # cut this off the end of every over: set it to your repeater's tail
                            # (e.g. 800) so Whisper isn't left inventing words for the hiss
+  quality:                 # audio quality per over (the repeater's signal is always good, so
+                           # it's judged from the hiss and crackle). Poor overs are transcribed
+                           # but not learned from, not read as shouting, and the AI is told.
+    rough_snr_db: 25          # speech this far (dB) over the hiss floor or less = rough
+    poor_snr_db: 12           # ... or less = poor
+    rough_crackle: 0.05       # share of 20 ms frames with a click in them: above this = rough
+    poor_crackle: 0.2         # above this = poor
   reply_gap_ms: 1500       # the channel must be quiet this long before it keys up
   talk_over: false         # true = don't wait for a gap, key up over whoever's talking (also a box on the page)
   reply_wait_s: 20         # gives up on a reply if the channel doesn't go quiet

@@ -40,7 +40,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import tts
-from . import brain, stt, turns
+from . import brain, quality, stt, turns
 from .capture import OverCapture, to_float, wav_bytes
 from .speakers import People, create_embedder
 
@@ -262,9 +262,16 @@ class Agent:
             item["part"] = part
         if mixed:
             item["mixed"] = True
-        loud = self._loudness(samples)
-        if loud is not None:
-            item["loud_db"] = loud
+        q = quality.measure(samples, self.rate, b["quality"])
+        if q:
+            item.update(quality=q["grade"], snr_db=q["snr_db"], crackle=q["crackle"])
+        poor = bool(q) and q["grade"] == "poor"
+        if poor:
+            item["poor"] = True
+        else:   # hiss reads as level: a scratchy over isn't louder, and would skew the usual
+            loud = self._loudness(samples)
+            if loud is not None:
+                item["loud_db"] = loud
         self._upsert(item)
         if b["keep_audio"]:
             day = self.dir / "audio" / time.strftime("%Y-%m-%d", time.localtime(started))
@@ -280,10 +287,11 @@ class Agent:
             if b["stt"]["hint_names"]:
                 hint = ", ".join(p["name"] for p in self.people.list() if p["kind"] != "anonymous")
             try:
+                heard = quality.level_up(samples, self.rate)   # quiet stations up to a normal level
                 if self.stt.is_async:
-                    text = await self.stt.transcribe(samples, hint)
+                    text = await self.stt.transcribe(heard, hint, poor)
                 else:
-                    text = await asyncio.to_thread(self.stt.transcribe, samples, hint)
+                    text = await asyncio.to_thread(self.stt.transcribe, heard, hint, poor)
             except Exception as e:
                 log.error("AI agent: speech to text: %s", e)
             item["stt_ms"] = int((time.monotonic() - t0) * 1000)
@@ -297,7 +305,8 @@ class Agent:
                 emb = await asyncio.to_thread(self.embedder.embed, samples)
             except Exception as e:
                 log.error("AI agent: speaker embedding: %s", e)
-        learn = None if mixed else emb   # two voices at once: say who it sounds most like, learn nothing
+        # Two voices at once, or too scratchy to trust: say who it sounds most like, learn nothing.
+        learn = None if mixed or poor else emb
         if emb is not None:
             person, score = self.people.identify(emb)
             if (learn is not None and person is None and score < self.people.new and b["learn_anonymous"]
@@ -345,7 +354,8 @@ class Agent:
         history = list(self.context)[:-1]
         messages = brain.build_messages(self.persona, self.name, policy, bool(b["learn_notes"]), who,
                                         notes, history, text, tones=bool(b["tones"]),
-                                        delivery=_delivery(item.get("loud_db")))
+                                        delivery="; ".join(d for d in (_delivery(item.get("loud_db")),
+                                                                       quality.describe(q)) if d) or None)
         t0 = time.monotonic()
         try:
             raw = await self.llm.chat(messages)
@@ -364,7 +374,7 @@ class Agent:
             # models often offer the name of whoever was being talked to ("Bluey, you there?"),
             # and believing that pours everyone's voice into Bluey's voiceprint.
             said = out["name"] if out["name"] and len(out["name"]) <= 40 and _introduced(out["name"], text) else None
-            if said and not mixed:
+            if said and not mixed and not poor:
                 person = self._said_name(said, person, score, emb, item, over_id)
         if person and b["learn_notes"]:
             changed = False
@@ -545,6 +555,8 @@ class Agent:
         item = self.items.get(over_id) or {}
         if item.get("mixed"):
             return "That over has two voices in it at once, so it can't teach it either one"
+        if item.get("poor"):
+            return "That over is too scratchy to learn a voice from: pick a cleaner one"
         target = self.people.find_name(name)
         current = self.people.get(item.get("person")) if item.get("person") else None
         caller = current if current and current["kind"] == "anonymous" else None

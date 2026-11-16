@@ -1163,8 +1163,11 @@ function renderBot() {
       if (it.score != null) who.title = `voice match ${Math.round(it.score * 100)}%`;
       body.append(who);
       body.append(document.createTextNode(it.text == null ? "…" : it.text || "(no words)"));
-      const extra = (it.mixed ? " · two voices at once" : "") + (it.part ? ` · part ${it.part}` : "");
-      body.append(el("span", "meta", `${it.secs} s${extra}`));
+      const audio = { rough: " · scratchy", poor: " · very scratchy" }[it.quality] || "";
+      const extra = (it.mixed ? " · two voices at once" : "") + (it.part ? ` · part ${it.part}` : "") + audio;
+      const meta = el("span", "meta", `${it.secs} s${extra}`);
+      if (it.snr_db != null) meta.title = `speech ${it.snr_db} dB over the hiss, clicks in ${Math.round(it.crackle * 100)}% of it`;
+      body.append(meta);
       li.append(body);
       const name = el("button", null, "Name…");
       name.type = "button";
@@ -1173,7 +1176,7 @@ function renderBot() {
         const n = prompt("Whose voice is this?", it.who_kind === "anonymous" ? "" : it.who || "");
         if (n && n.trim()) send({ type: "bot_enrol", over: it.id, name: n.trim() });
       });
-      li.append(it.secs >= 1 && !it.mixed ? name : el("span"));
+      li.append(it.secs >= 1 && !it.mixed && !it.poor ? name : el("span"));
     }
     return li;
   }));

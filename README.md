@@ -292,9 +292,16 @@ For each over it:
    and splits at the changeover, and each part then goes through as an over of its own
    (`bot.split_overs`, sensitivity `bot.speaker.split`). A stretch where two stations are
    transmitting at once is labelled with the closest voice but never learned from.
-2. Transcribes it: Whisper on the Pi's CPU (`faster_whisper`), or any OpenAI-compatible
-   transcription server.
-3. Works out who it was: a voiceprint (SpeechBrain ECAPA) compared with the people it knows.
+2. Rates the audio. Through a repeater the signal strength is always good, so it listens for
+   hiss under the words and crackle instead, and grades each over clean, rough or poor
+   (`bot.quality`; hover over an over's details on the page for the numbers). A poor over is
+   still transcribed and identified, but it isn't learned from, its level isn't taken as
+   shouting, and the AI is told it was scratchy so it doesn't take misheard words literally.
+3. Transcribes it: Whisper on the Pi's CPU (`faster_whisper`), or any OpenAI-compatible
+   transcription server. Quiet stations are brought up to a normal level first. What Whisper
+   makes up out of noise is dropped (stock phrases, loops, the vocabulary hint read back), and a
+   repeater's tail can be cut off every over first (`bot.tail_ms`).
+4. Works out who it was: a voiceprint (SpeechBrain ECAPA) compared with the people it knows.
    People you name are **known**. An unfamiliar voice is kept as **Caller N** and recognised next
    time, and becomes **acquainted** once it hears their name. Each person's voiceprint keeps a
    spread of their overs and matches on the closest few, so someone on two different radios is
@@ -304,11 +311,11 @@ For each over it:
    it says so rather than guessing. Someone introducing themselves on air ("this is Bluey",
    "Bluey here", "Bluey to base") beats the voice match; just being called a name doesn't.
    To tune the thresholds (`bot.speaker`): `python -m server.bot people --similar`.
-4. Decides whether to say something: an LLM gets the persona, what it knows about the speaker
+5. Decides whether to say something: an LLM gets the persona, what it knows about the speaker
    (their notes), the last few overs and the new one. It runs on Ollama, on hailo-ollama on the
    AI HAT+ 2 (Pi 5), or on any OpenAI-compatible server. It can also add to the speaker's notes
    and pick up their name.
-5. Speaks: Piper offline (your own Australian voice: [docs/voice/README.md](docs/voice/README.md)),
+6. Speaks: Piper offline (your own Australian voice: [docs/voice/README.md](docs/voice/README.md)),
    or Azure, Google or ElevenLabs Australian voices over the internet. With `bot.tones` on, it
    picks a tone for each reply: normal, raised or shout. It also hears when someone is shouting,
    from the over's level against the channel's usual. A raised or shouted reply is faster, higher
