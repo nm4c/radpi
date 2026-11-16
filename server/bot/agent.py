@@ -1,6 +1,7 @@
 """The AI agent: listens to the channel, works out who is talking, and (if allowed) answers.
 
-    received audio -> OverCapture -> queue -> worker:  speech to text
+    received audio -> OverCapture -> queue -> worker:  cut where the voice changes (turns.py)
+                                                       then for each part: speech to text
                                                        speaker embedding -> People (who is it?)
                                                        LLM (persona + their notes + recent overs)
                                                        learn: their name, a note
@@ -13,9 +14,12 @@ Modes (switched from the web page; bot.mode is the start-up one):
   auto     replies go on air by themselves
 
 Behaviour is set by the config (persona, reply_policy, rate limits, learning), not fixed here.
-What is fixed is radio mechanics: it never keys up while the channel is busy or someone else is
-transmitting, every transmission is bounded by bot.max_reply_s and the server's own
-ptt.max_tx_seconds watchdog, and any operator can stop it or switch it to listen.
+Radio mechanics: it waits for the channel to be quiet for bot.reply_gap_ms before keying up,
+unless an operator ticks "Talk over people" (bot.talk_over at start-up): then it transmits as
+soon as its reply is ready, busy channel or not. Either way it never keys up while our own
+transmitter is in use (an operator talking through the web page), every transmission is bounded
+by bot.max_reply_s and the server's own ptt.max_tx_seconds watchdog, and any operator can stop
+it or switch it to listen.
 
 Research log: <bot.dir>/log/YYYY-MM-DD.jsonl, one JSON object per line: every over (time,
 length, transcript, who it was matched to and how closely), every LLM decision (prompt size,
@@ -27,6 +31,7 @@ import asyncio
 import collections
 import json
 import logging
+import re
 import secrets
 import shutil
 import time
@@ -35,7 +40,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import tts
-from . import brain, stt
+from . import brain, stt, turns
 from .capture import OverCapture, to_float, wav_bytes
 from .speakers import People, create_embedder
 
@@ -65,6 +70,24 @@ class BotOperator:
 
     def send_json(self, obj):
         pass
+
+
+_INTRO = r"(?:this is|it's|its|it is|i'm|im|i am|my name's|my name is|name's|names|call me)"
+
+
+def _introduced(name, text):
+    """Did the speaker give `name` as their own in `text`? "This is Bluey", "Bluey here",
+    "Bluey calling", "Bluey to base". Not just a mention: "Bluey, you there?" doesn't count."""
+    n = re.escape(" ".join(name.lower().split()))
+    if not n:
+        return False
+    t = " ".join(text.lower().replace("\u2019", "'").split())
+    end = r"(?!'\w)\b"
+    return any(re.search(p, t) for p in (
+        rf"\b{_INTRO}\s+(?:the\s+)?{n}{end}",
+        rf"(?:^|[.!?,]\s*){n}\s*,?\s+(?:here|calling)\b",
+        rf"^\W*{n}\s*,?\s+to\s+\w",
+    ))
 
 
 def _delivery(loud_db):
@@ -102,6 +125,7 @@ class Agent:
         self.name = str(b["name"])
         self.operator = BotOperator(self.name)
         self.mode = b["mode"]
+        self.talk_over = bool(b["talk_over"])
         self.persona = brain.load_persona(b["persona"])
         self.wake = [w.lower() for w in [self.name, *(b["wake_words"] or [])] if w]
         self.capture = OverCapture(self.rate, b["preroll_ms"], b["hang_ms"], float(b["min_over_s"]),
@@ -152,7 +176,7 @@ class Agent:
         while True:
             pcm, started, seconds, seq = await self.queue.get()
             try:
-                await self._process(pcm, started, seconds, seq)
+                await self._handle(pcm, started, seconds, seq)
             except Exception:
                 log.exception("AI agent: processing an over failed")
             finally:
@@ -196,12 +220,39 @@ class Agent:
 
     # ---- one over ----------------------------------------------------------------------
 
-    async def _process(self, pcm, started, seconds, seq):
+    async def _handle(self, pcm, started, seconds, seq):
+        """One recording from the capture: cut it where the voice changes (stations keying up
+        back to back), then each part goes through as an over of its own. Only the last part can
+        be answered: by then the earlier ones have been talked over anyway."""
+        b = self.b
+        parts, mixed, sims = [(0, len(pcm) // 2)], [False], []
+        if self.embedder and b["split_overs"] and seconds >= 2 * turns.WIN_S:
+            self._set_stage("identifying")
+            try:
+                parts, mixed, sims = await asyncio.to_thread(
+                    turns.split, to_float(pcm), self.rate, self.embedder.embed_many, self.people.split)
+            except Exception as e:
+                log.error("AI agent: looking for voice changes: %s", e)
+        if len(parts) > 1 or any(mixed):
+            self._log("split", t=started, secs=round(seconds, 1), mixed=mixed, sims=sims,
+                      parts=[[round(a / self.rate, 2), round(z / self.rate, 2)] for a, z in parts])
+        for i, (a, z) in enumerate(parts):
+            await self._process(pcm[2 * a:2 * z], started + a / self.rate, (z - a) / self.rate, seq,
+                                mixed=mixed[i], last=i == len(parts) - 1,
+                                part=f"{i + 1}/{len(parts)}" if len(parts) > 1 else None)
+
+    async def _process(self, pcm, started, seconds, seq, mixed=False, last=True, part=None):
+        """mixed: more than one voice right through it (identified, but never learned from);
+        last: False for an earlier part of a split recording (no reply); part: e.g. "2/3"."""
         b = self.b
         over_id = secrets.token_hex(5)
         samples = to_float(pcm)
         item = {"id": over_id, "kind": "over", "t": started, "secs": round(seconds, 1), "text": None,
                 "person": None, "who": None, "who_kind": None, "score": None}
+        if part:
+            item["part"] = part
+        if mixed:
+            item["mixed"] = True
         loud = self._loudness(samples)
         if loud is not None:
             item["loud_db"] = loud
@@ -235,13 +286,15 @@ class Agent:
                 emb = await asyncio.to_thread(self.embedder.embed, samples)
             except Exception as e:
                 log.error("AI agent: speaker embedding: %s", e)
+        learn = None if mixed else emb   # two voices at once: say who it sounds most like, learn nothing
         if emb is not None:
             person, score = self.people.identify(emb)
-            if (person is None and score < self.people.new and b["learn_anonymous"] and text
-                    and seconds >= float(b["speaker"]["min_enrol_s"])):
+            if (learn is not None and person is None and score < self.people.new and b["learn_anonymous"]
+                    and text and seconds >= float(b["speaker"]["min_enrol_s"])):
                 person = self.people.create(None, "anonymous", emb)
                 item["new_person"] = True
-            elif person is not None and score >= self.people.update:
+            elif (learn is not None and person is not None and score >= self.people.update
+                    and self.people.fits(person["id"], emb)):
                 self.people.add_sample(person["id"], emb)
                 if person["kind"] == "anonymous":
                     person = self._consolidate(person)
@@ -296,10 +349,11 @@ class Agent:
 
         # Learning.
         if b["learn_notes"]:
-            # A name only counts if it was actually said in this over (small models sometimes
-            # offer the name of whoever was being talked to, or one from earlier on).
-            said = out["name"] if out["name"] and len(out["name"]) <= 40 and out["name"].lower() in lowered else None
-            if said:
+            # A name only counts if the speaker introduced themselves with it in this over. Small
+            # models often offer the name of whoever was being talked to ("Bluey, you there?"),
+            # and believing that pours everyone's voice into Bluey's voiceprint.
+            said = out["name"] if out["name"] and len(out["name"]) <= 40 and _introduced(out["name"], text) else None
+            if said and not mixed:
                 person = self._said_name(said, person, score, emb, item, over_id)
         if person and b["learn_notes"]:
             changed = False
@@ -310,7 +364,7 @@ class Agent:
             if changed:
                 self._broadcast(people=self.people.list())
 
-        if not out["reply"] or self.mode == "listen":
+        if not out["reply"] or self.mode == "listen" or not last:
             return
         reply = Reply(over_id, out["reply"], seq)
         spoken = tts.clean(reply.text, b["pronounce"])
@@ -365,6 +419,8 @@ class Agent:
             if b["drop_stale"] and self.seq > reply.seq:
                 return self._finish(reply, "dropped", "someone else spoke first")
             busy, on_air = self.head.bot_channel_state()
+            if self.talk_over and not on_air:
+                break  # straight over the top of whoever is talking
             if busy or on_air or self.capture.active:
                 quiet_since = None
             elif quiet_since is None:
@@ -405,7 +461,8 @@ class Agent:
     # ---- web page ------------------------------------------------------------------------
 
     def hello(self):
-        return {"name": self.name, "mode": self.mode, "policy": self.b["reply_policy"], "status": self.status,
+        return {"name": self.name, "mode": self.mode, "talk_over": self.talk_over,
+                "policy": self.b["reply_policy"], "status": self.status,
                 "stage": self.stage, "people": self.people.list(), "items": list(self.items.values())[-SHOWN:],
                 "backends": {k: self.b[k]["backend"] for k in ("stt", "speaker", "llm", "tts")}}
 
@@ -422,6 +479,14 @@ class Agent:
             if mode == "listen" and self.pending:
                 self._finish(self.pending, "dropped", "switched to listen")
             self._broadcast(mode=mode)
+        elif kind == "bot_talk_over":
+            on = bool(m.get("on"))
+            if on != self.talk_over:
+                self.talk_over = on
+                log.info("%s %s talking over people", c.name, "allowed" if on else "stopped")
+                self.head.bot_audit(c, "bot_talk_over", on=on)
+                self._log("talk_over", on=on, by=c.username)
+                self._broadcast(talk_over=on)
         elif kind in ("bot_approve", "bot_reject"):
             r = self.pending
             if not r or r.id != m.get("id") or not r.decision or r.decision.done():
@@ -442,7 +507,7 @@ class Agent:
                 return "Nobody to rename"
             other = self.people.find_name(name)
             if other and other["id"] != p["id"]:
-                self.people.merge(p["id"], other["id"])
+                self.people.merge(p["id"], other["id"], vouched=True)
             else:
                 self.people.rename(p["id"], name, "known" if p["kind"] == "anonymous" else None)
             self._log("rename", person=p["id"], name=name, by=c.username)
@@ -456,26 +521,34 @@ class Agent:
         return None
 
     def _enrol(self, c, over_id, name):
-        """Name the voice in one over: makes or updates a known person."""
+        """Name the voice in one over: makes or updates a known person, with the over as an anchor.
+
+        If the over had been put down to an anonymous caller, that caller was them all along and
+        is folded in. If it had been put down to a different named person, that was a wrong match:
+        the over is moved, and the other person is left as they were."""
         if not name:
             return "Type a name"
         if over_id not in self.embeddings:
             return "That over is too short or too old to learn a voice from"
         emb, _ = self.embeddings[over_id]
         item = self.items.get(over_id) or {}
+        if item.get("mixed"):
+            return "That over has two voices in it at once, so it can't teach it either one"
         target = self.people.find_name(name)
         current = self.people.get(item.get("person")) if item.get("person") else None
+        caller = current if current and current["kind"] == "anonymous" else None
         if target:
-            if current and current is not target:
-                self.people.merge(current["id"], target["id"])
-            self.people.add_sample(target["id"], emb)
-        elif current:
-            target = self.people.rename(current["id"], name, "known")
+            if caller and caller is not target:
+                self.people.merge(caller["id"], target["id"], vouched=True)
+            self.people.add_sample(target["id"], emb, anchor=True)
+        elif caller:
+            target = self.people.rename(caller["id"], name, "known")
+            self.people.add_sample(target["id"], emb, anchor=True)
         else:
             target = self.people.create(name, "known", emb)
-        # Relabel this over and any other recent ones of the merged/renamed person.
+        # Relabel this over and any other recent ones of the merged/renamed caller.
         for it in self.items.values():
-            if it.get("kind") == "over" and (it["id"] == over_id or (current and it.get("person") == current["id"])):
+            if it.get("kind") == "over" and (it["id"] == over_id or (caller and it.get("person") == caller["id"])):
                 it.update(person=target["id"], who=target["name"], who_kind=target["kind"])
                 self._broadcast(items=[it])
         self._log("enrol", over=over_id, person=target["id"], name=name, by=c.username)
@@ -515,12 +588,12 @@ class Agent:
             # Not sure from the voice (or no voice): the name settles it.
             if existing:
                 person = existing
+                if emb is not None and self.people.fits(person["id"], emb):
+                    self.people.add_sample(person["id"], emb)
             elif emb is not None:
-                person = self.people.create(name, "acquainted")
+                person = self.people.create(name, "acquainted", emb)
             else:
                 return None
-            if emb is not None:
-                self.people.add_sample(person["id"], emb)
             self.people.seen(person["id"])
             self._log("learned_name", person=person["id"], name=name, over=over_id)
         elif person["kind"] == "anonymous":
@@ -535,7 +608,7 @@ class Agent:
             # The voice said one person, they said they're someone else: believe them.
             self._log("reassigned", over=over_id, person=existing["id"], name=name,
                       voice=person["id"], voice_name=person["name"], score=score)
-            if emb is not None:
+            if emb is not None and self.people.fits(existing["id"], emb):
                 self.people.add_sample(existing["id"], emb)
             self.people.seen(existing["id"])
             person = existing

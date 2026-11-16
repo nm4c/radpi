@@ -16,6 +16,13 @@ people (known, acquainted) are never merged automatically. When the voiceprint i
 (speaker.max_samples), the most redundant over is dropped rather than the oldest, so the different
 radios someone uses stay represented.
 
+Anchors keep a voiceprint from drifting. A person's anchors are the overs that are certainly
+theirs: the first one it heard, and every over an operator names (in the web page, or enrol).
+An automatic update only adds an over that also matches the anchors (>= speaker.update), and an
+anonymous caller is only merged into someone whose anchors it matches (>= speaker.merge).
+Without that, one wrong match lets another voice in, which makes the next wrong match likelier,
+until one person's voiceprint matches everybody. Anchors are never trimmed away.
+
 People come in three kinds:
   known       enrolled by an operator (named in the web page or with  python -m server.bot enrol)
   acquainted  was anonymous, then said a name the LLM picked up
@@ -25,6 +32,8 @@ People come in three kinds:
 Files, in <bot.dir>/people/:
   people.json      [{"id", "name", "kind", "created", "last_seen", "overs"}]
   <id>.npy         that person's voiceprint samples (one embedding per row)
+  <id>.anchors.npy  the anchors (same format); a voiceprint from before anchors has none, and
+                   then updates aren't checked: name one of their overs to give them one
   <id>.md          notes: written by an operator or by the agent itself; plain text, editable
 
 Embedding backends (bot.speaker.backend):
@@ -47,6 +56,9 @@ log = logging.getLogger("bot.speakers")
 # (match, update, new, merge) per backend. ECAPA's are for narrowband FM radio audio, which scores
 # lower for the same voice than the clean recordings the model was trained on.
 DEFAULT_THRESHOLDS = {"ecapa": (0.50, 0.62, 0.38, 0.55), "basic": (0.96, 0.98, 0.93, 0.97)}
+# Two 1.5 s windows of one over less alike than this are different voices (speaker.split; turns.py).
+# Short windows give noisier embeddings than whole overs, so this sits below speaker.new.
+DEFAULT_SPLIT = {"ecapa": 0.30, "basic": 0.90}
 TOP_K = 3  # a person's score: the mean of this many of their closest kept overs
 NOTES_MAX = 4000  # characters of notes kept per person (older lines are trimmed off the top)
 
@@ -66,6 +78,12 @@ class EcapaEmbedder:
         with self.torch.no_grad():
             e = self.model.encode_batch(self.torch.from_numpy(samples)[None])
         return e.squeeze().cpu().numpy().astype(np.float32)
+
+    def embed_many(self, chunks):
+        """One embedding per chunk, all in one batch (the chunks must be the same length)."""
+        with self.torch.no_grad():
+            e = self.model.encode_batch(self.torch.from_numpy(np.stack(chunks).astype(np.float32)))
+        return list(e.squeeze(1).cpu().numpy().astype(np.float32))
 
 
 class BasicEmbedder:
@@ -105,6 +123,9 @@ class BasicEmbedder:
         voiced = voiced - voiced.mean(axis=1, keepdims=True)  # level-independent
         return np.concatenate([voiced.mean(axis=0), voiced.std(axis=0)]).astype(np.float32)
 
+    def embed_many(self, chunks):
+        return [self.embed(c) for c in chunks]
+
 
 def create_embedder(cfg, rate, bot_dir):
     if cfg["backend"] == "ecapa":
@@ -140,17 +161,21 @@ class People:
         self.index = self.dir / "people.json"
         defaults = dict(zip(("match", "update", "new", "merge"), DEFAULT_THRESHOLDS[backend]))
         for key, default in defaults.items():
-            setattr(self, key, float(cfg[key]) if cfg.get(key) is not None else default)
+            # merge -> merge_at: an attribute called merge would hide the merge() method
+            setattr(self, "merge_at" if key == "merge" else key, float(cfg[key]) if cfg.get(key) is not None else default)
         self.new = min(self.new, self.match)
+        self.split = float(cfg["split"]) if cfg.get("split") is not None else DEFAULT_SPLIT[backend]
         self.max_samples = int(cfg["max_samples"])
         self.lock = threading.RLock()
         self.people = self._load()
         self.samples = {}
+        self.anchors = {}
         for p in self.people:
-            try:
-                self.samples[p["id"]] = np.load(self.dir / f"{p['id']}.npy")
-            except (OSError, ValueError):
-                self.samples[p["id"]] = None
+            for store, suffix in ((self.samples, ".npy"), (self.anchors, ".anchors.npy")):
+                try:
+                    store[p["id"]] = np.load(self.dir / f"{p['id']}{suffix}")
+                except (OSError, ValueError):
+                    store[p["id"]] = None
 
     def _load(self):
         try:
@@ -168,9 +193,26 @@ class People:
         tmp.replace(self.index)
 
     def _save_samples(self, pid):
-        s = self.samples.get(pid)
-        if s is not None:
-            np.save(self.dir / f"{pid}.npy", s)
+        for store, suffix in ((self.samples, ".npy"), (self.anchors, ".anchors.npy")):
+            s = store.get(pid)
+            if s is not None:
+                np.save(self.dir / f"{pid}{suffix}", s)
+
+    def voiceprint(self, pid):
+        """All of a person's embeddings, anchors and samples together (None if none)."""
+        parts = [x for x in (self.anchors.get(pid), self.samples.get(pid)) if x is not None and len(x)]
+        if len(parts) == 2 and parts[0].shape[1] != parts[1].shape[1]:
+            parts = parts[1:]
+        return np.vstack(parts) if parts else None
+
+    def fits(self, pid, emb):
+        """Does this voice match pid's anchors well enough to be added to their voiceprint?
+        True when they have no anchors (a voiceprint from before anchors existed)."""
+        a = self.anchors.get(pid)
+        e = _unit(emb)
+        if a is None or not len(a) or a.shape[1] != len(e):
+            return True
+        return float(np.max(a @ e)) >= self.update   # the closest anchor: they may have several radios
 
     def list(self):
         with self.lock:
@@ -192,20 +234,22 @@ class People:
         best, score = None, -1.0
         with self.lock:
             for p in self.people:
-                s = self.samples.get(p["id"])
-                if s is None or not len(s) or s.shape[1] != len(e):
+                s = self.voiceprint(p["id"])
+                if s is None or s.shape[1] != len(e):
                     continue
                 sim = _score(s, e)
                 if sim > score:
                     best, score = p, sim
         return (best, score) if best is not None and score >= self.match else (None, score)
 
-    def add_sample(self, pid, emb):
+    def add_sample(self, pid, emb, anchor=False):
+        """Add an over to pid's voiceprint; anchor=True for one that is certainly theirs."""
         with self.lock:
-            s = self.samples.get(pid)
+            store = self.anchors if anchor else self.samples
+            s = store.get(pid)
             row = _unit(emb)[None]
             s = row if s is None or not len(s) or s.shape[1] != row.shape[1] else np.vstack([s, row])
-            self.samples[pid] = self._trim(s)
+            store[pid] = self._trim(s)
             self._save_samples(pid)
 
     def _trim(self, s):
@@ -221,13 +265,14 @@ class People:
     def similar(self, pid=None):
         """[(score, a, b)] for pairs of people, most alike first; only pairs with pid if given."""
         with self.lock:
-            have = [p for p in self.people if self.samples.get(p["id"]) is not None and len(self.samples[p["id"]])]
+            prints = {p["id"]: self.voiceprint(p["id"]) for p in self.people}
+            have = [p for p in self.people if prints[p["id"]] is not None]
             out = []
             for i, a in enumerate(have):
                 for b in have[i + 1:]:
                     if pid and pid not in (a["id"], b["id"]):
                         continue
-                    sa, sb = self.samples[a["id"]], self.samples[b["id"]]
+                    sa, sb = prints[a["id"]], prints[b["id"]]
                     if sa.shape[1] == sb.shape[1]:
                         out.append((float(_pair_score(sa, sb)), a, b))
             return sorted(out, key=lambda t: -t[0])
@@ -239,7 +284,7 @@ class People:
         merges = []
         with self.lock:
             for score, a, b in self.similar(pid):
-                if score < self.merge:
+                if score < self.merge_at:
                     break
                 if self.get(a["id"]) is None or self.get(b["id"]) is None:
                     continue
@@ -250,6 +295,11 @@ class People:
                     src, dst = a, b
                 else:
                     src, dst = b, a
+                anchors, theirs = self.anchors.get(dst["id"]), self.voiceprint(src["id"])
+                if (anchors is not None and len(anchors) and theirs is not None
+                        and anchors.shape[1] == theirs.shape[1]
+                        and float(np.mean(np.max(theirs @ anchors.T, axis=1))) < self.merge_at):
+                    continue  # alike overall, but not like the overs that are certainly dst's
                 self.merge(src["id"], dst["id"])
                 merges.append((src, dst))
                 if src["id"] == pid:
@@ -276,8 +326,9 @@ class People:
                  "last_seen": time.time(), "overs": 0}
             self.people.append(p)
             self.samples[p["id"]] = None
+            self.anchors[p["id"]] = None
             if emb is not None:
-                self.add_sample(p["id"], emb)
+                self.add_sample(p["id"], emb, anchor=True)  # the first over is certainly theirs
             self._save()
             return p
 
@@ -292,17 +343,22 @@ class People:
             self._save()
             return p
 
-    def merge(self, src_id, dst_id):
-        """Fold person src into dst (voiceprint samples, notes, counts), then delete src."""
+    def merge(self, src_id, dst_id, vouched=False):
+        """Fold person src into dst (voiceprint, notes, counts), then delete src. vouched: an
+        operator said they're the same person, so src's anchors become dst's anchors too;
+        otherwise everything of src's joins dst's ordinary samples."""
         with self.lock:
             src, dst = self.get(src_id), self.get(dst_id)
             if not src or not dst or src is dst:
                 return dst
-            a, b = self.samples.get(dst_id), self.samples.get(src_id)
-            if b is not None and len(b):
-                merged = b if a is None or not len(a) or a.shape[1] != b.shape[1] else np.vstack([a, b])
-                self.samples[dst_id] = self._trim(merged)
-                self._save_samples(dst_id)
+            moves = [(self.anchors.get(src_id), self.anchors if vouched else self.samples),
+                     (self.samples.get(src_id), self.samples)]
+            for b, store in moves:
+                if b is None or not len(b):
+                    continue
+                a = store.get(dst_id)
+                store[dst_id] = self._trim(b if a is None or not len(a) or a.shape[1] != b.shape[1] else np.vstack([a, b]))
+            self._save_samples(dst_id)
             notes = self.notes(src_id)
             if notes:
                 self.add_note(dst_id, notes, stamp=False)
@@ -318,7 +374,8 @@ class People:
                 return None
             self.people.remove(p)
             self.samples.pop(pid, None)
-            for ext in (".npy", ".md"):
+            self.anchors.pop(pid, None)
+            for ext in (".npy", ".anchors.npy", ".md"):
                 (self.dir / f"{pid}{ext}").unlink(missing_ok=True)
             self._save()
             return p

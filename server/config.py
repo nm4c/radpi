@@ -151,9 +151,12 @@ DEFAULTS = {
         "context_overs": 12,        # recent overs shown to the LLM
         "min_over_s": 0.8,          # shorter overs (kerchunks) are ignored
         "max_over_s": 60,           # longer ones are cut into parts
+        "split_overs": True,        # cut an over where the voice changes (back-to-back or doubled overs)
         "preroll_ms": 300,          # audio kept from before the channel went busy
         "hang_ms": 700,             # an over ends after the channel is quiet this long
         "reply_gap_ms": 1500,       # the channel must be quiet this long before it keys up
+        "talk_over": False,         # start-up setting of the web page's "Talk over people" box:
+                                    # true = key up as soon as a reply is ready, busy channel or not
         "reply_wait_s": 20,         # give up on a reply if the channel doesn't go quiet
         "drop_stale": True,         # drop a reply if someone else has spoken since
         "max_reply_s": 30,          # longest reply on air (also capped by ptt.max_tx_seconds)
@@ -182,6 +185,7 @@ DEFAULTS = {
             "new": None,                  # below this it's a new caller; between new and match, not sure
             "merge": None,                # anonymous callers this alike are merged into one
             "min_enrol_s": 2.5,           # shortest over that can start a new voiceprint
+            "split": None,                # voice change inside an over (bot.split_overs); null = backend default
             "max_samples": 30,            # voiceprint samples kept per person
             "model_dir": None,            # where the ecapa model is cached; null = <dir>/models
         },

@@ -229,7 +229,9 @@ bot:
   tones: true              # it can raise its voice or shout back (faster, higher, mic overdriven)
   opt_out_phrases: []      # e.g. ["forget me"]: deletes that speaker's profile. Empty = off
   context_overs: 12        # recent overs it sees each time
+  split_overs: true        # cut an over where the voice changes (stations keying up back to back)
   reply_gap_ms: 1500       # the channel must be quiet this long before it keys up
+  talk_over: false         # true = don't wait for a gap, key up over whoever's talking (also a box on the page)
   reply_wait_s: 20         # gives up on a reply if the channel doesn't go quiet
   drop_stale: true         # drops a reply if someone else spoke in the meantime
   max_reply_s: 30          # longest reply (also capped by ptt.max_tx_seconds)
@@ -249,6 +251,7 @@ bot:
     match: null               # how similar counts as the same person; null = the backend's default
     new: null                 # below this, a new caller; between new and match it says "not sure"
     merge: null               # anonymous callers whose voices are this alike are merged
+    split: null               # within one over, stretches less alike than this are different voices
                               # See  python -m server.bot people --similar  to tune these.
   llm:
     backend: ollama           # ollama or hailo-ollama (AI HAT+ 2); openai = any compatible server; mock

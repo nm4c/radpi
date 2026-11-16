@@ -35,7 +35,7 @@ AUTH_RECHECK_S = 5      # how often connected operators are re-checked against t
 # Messages only 'control' accounts may send. Everything else a 'listen' account sends is ignored.
 CONTROL_MESSAGES = {"ptt", "ptt_hold", "channel", "selcall", "voice_fx", "record",
                     "clip_play", "clip_stop", "clip_delete", "clip_rename", "say", "say_stop",
-                    "bot_mode", "bot_approve", "bot_reject", "bot_stop", "bot_enrol", "bot_rename", "bot_forget"}
+                    "bot_mode", "bot_approve", "bot_reject", "bot_stop", "bot_enrol", "bot_rename", "bot_forget", "bot_talk_over"}
 
 
 

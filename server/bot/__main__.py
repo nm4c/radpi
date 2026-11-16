@@ -93,7 +93,7 @@ async def replay(cfg, args):
         print(f"{path}: {len(overs)} over{'s' * (len(overs) != 1)}")
         for pcm in overs:
             agent.seq += 1
-            await agent._process(pcm, time.time(), len(pcm) / 2 / rate, agent.seq)
+            await agent._handle(pcm, time.time(), len(pcm) / 2 / rate, agent.seq)
             while agent.pending:  # let its reply "go out" before the next over
                 await asyncio.sleep(0.05)
     runner.cancel()
@@ -107,7 +107,7 @@ async def enrol(cfg, args):
     person = agent.people.find_name(args.name) or agent.people.create(args.name, "known")
     for path in args.files:
         x = read_wav(path, rate)
-        agent.people.add_sample(person["id"], emb.embed(x))
+        agent.people.add_sample(person["id"], emb.embed(x), anchor=True)
         print(f"{args.name}: added {path} ({len(x) / rate:.1f} s)")
     if args.note:
         agent.people.add_note(person["id"], args.note)
@@ -119,11 +119,12 @@ def people(cfg, args):
     ppl = People(Path(b["dir"]) / "people", b["speaker"], b["speaker"]["backend"])
     for p in sorted(ppl.list(), key=lambda p: (p["kind"], p["name"])):
         seen = time.strftime("%Y-%m-%d %H:%M", time.localtime(p.get("last_seen", 0)))
-        s = ppl.samples.get(p["id"])
-        print(f"{p['name']:<20} {p['kind']:<11} {p.get('overs', 0):>5} overs  {0 if s is None else len(s):>2} samples"
+        s, a = ppl.samples.get(p["id"]), ppl.anchors.get(p["id"])
+        print(f"{p['name']:<20} {p['kind']:<11} {p.get('overs', 0):>5} overs  {0 if a is None else len(a):>2} anchors"
+              f"  {0 if s is None else len(s):>2} samples"
               f"  last {seen}  ({p['id']})")
     if args.similar:
-        print(f"\nMost alike pairs (match {ppl.match:.2f}, merge {ppl.merge:.2f}, new {ppl.new:.2f}):")
+        print(f"\nMost alike pairs (match {ppl.match:.2f}, merge {ppl.merge_at:.2f}, new {ppl.new:.2f}):")
         for score, a, c in ppl.similar()[:args.similar]:
             print(f"  {score:.3f}  {a['name']} ({a['kind']})  ~  {c['name']} ({c['kind']})")
 

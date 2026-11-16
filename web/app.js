@@ -1094,7 +1094,7 @@ function onBot(m) {
   if (!S.bot) return;
   for (const it of m.items || []) S.botItems.set(it.id, { ...(S.botItems.get(it.id) || {}), ...it });
   while (S.botItems.size > BOT_ITEMS_MAX) S.botItems.delete(S.botItems.keys().next().value);
-  for (const k of ["people", "mode", "status"]) if (m[k] !== undefined) S.bot[k] = m[k];
+  for (const k of ["people", "mode", "status", "talk_over"]) if (m[k] !== undefined) S.bot[k] = m[k];
   if ("stage" in m) S.bot.stage = m.stage;
   renderBot();
 }
@@ -1130,6 +1130,7 @@ function renderBot() {
     btn.setAttribute("aria-pressed", btn.dataset.mode === b.mode ? "true" : "false");
   }
   $("#botModeHint").textContent = BOT_MODE_HINT[b.mode] || "";
+  $("#botTalkOver").checked = !!b.talk_over;
   const known = b.people.filter((p) => p.kind !== "anonymous").length;
   $("#botInfo").textContent = `${b.name} · ${known} known · ${b.people.length - known} new`;
   $("#botStage").textContent = BOT_STAGE[b.stage] || "";
@@ -1162,7 +1163,8 @@ function renderBot() {
       if (it.score != null) who.title = `voice match ${Math.round(it.score * 100)}%`;
       body.append(who);
       body.append(document.createTextNode(it.text == null ? "…" : it.text || "(no words)"));
-      body.append(el("span", "meta", `${it.secs} s`));
+      const extra = (it.mixed ? " · two voices at once" : "") + (it.part ? ` · part ${it.part}` : "");
+      body.append(el("span", "meta", `${it.secs} s${extra}`));
       li.append(body);
       const name = el("button", null, "Name…");
       name.type = "button";
@@ -1171,7 +1173,7 @@ function renderBot() {
         const n = prompt("Whose voice is this?", it.who_kind === "anonymous" ? "" : it.who || "");
         if (n && n.trim()) send({ type: "bot_enrol", over: it.id, name: n.trim() });
       });
-      li.append(it.secs >= 1 ? name : el("span"));
+      li.append(it.secs >= 1 && !it.mixed ? name : el("span"));
     }
     return li;
   }));
@@ -1551,6 +1553,7 @@ function init() {
 
   $("#clipUpload").addEventListener("click", () => $("#clipFile").click());
   for (const b of $("#botModes").children) b.addEventListener("click", () => send({ type: "bot_mode", mode: b.dataset.mode }));
+  $("#botTalkOver").addEventListener("change", (e) => send({ type: "bot_talk_over", on: e.target.checked }));
   $("#botSend").addEventListener("click", () => botDecide(true));
   $("#botDiscard").addEventListener("click", () => botDecide(false));
   $("#botStop").addEventListener("click", () => send({ type: "bot_stop" }));
