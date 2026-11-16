@@ -174,9 +174,9 @@ class Agent:
         self._broadcast(status=self.status)
         self._spawn(self._housekeeping())
         while True:
-            pcm, started, seconds, seq = await self.queue.get()
+            pcm, started, seconds, seq, ended = await self.queue.get()
             try:
-                await self._handle(pcm, started, seconds, seq)
+                await self._handle(pcm, started, seconds, seq, ended)
             except Exception:
                 log.exception("AI agent: processing an over failed")
             finally:
@@ -211,22 +211,27 @@ class Agent:
     def feed(self, pcm, busy, keyed):
         self.capture.feed(pcm, busy, keyed)
 
-    def _on_over(self, pcm, started, seconds):
+    def _on_over(self, pcm, started, seconds, ended=True):
         self.seq += 1
         if self.queue.full():
             self.queue.get_nowait()
             log.warning("AI agent is falling behind: dropped the oldest waiting over")
-        self.queue.put_nowait((pcm, started, seconds, self.seq))
+        self.queue.put_nowait((pcm, started, seconds, self.seq, ended))
 
     # ---- one over ----------------------------------------------------------------------
 
-    async def _handle(self, pcm, started, seconds, seq):
+    async def _handle(self, pcm, started, seconds, seq, ended=True):
         """One recording from the capture: cut it where the voice changes (stations keying up
         back to back), then each part goes through as an over of its own. Only the last part can
-        be answered: by then the earlier ones have been talked over anyway."""
+        be answered: by then the earlier ones have been talked over anyway.
+
+        ended: the channel went quiet (so the recording finishes with the repeater's tail, which
+        tail_ms cuts off), rather than a long over cut at max_over_s with someone still talking.
+        Stations keying up over each other keep the channel busy, so there's no tail between
+        them, only after the last one lets go."""
         b = self.b
         tail = int(int(b["tail_ms"] or 0) * self.rate / 1000) * 2   # repeater/squelch tail, in bytes
-        if tail and len(pcm) - tail >= int(float(b["min_over_s"]) * self.rate) * 2:
+        if tail and ended and len(pcm) - tail >= int(float(b["min_over_s"]) * self.rate) * 2:
             pcm = pcm[:len(pcm) - tail]
             seconds = len(pcm) / 2 / self.rate
         parts, mixed, sims = [(0, len(pcm) // 2)], [False], []

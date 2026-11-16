@@ -67,7 +67,7 @@ class OfflineHead:
 def _split(samples, rate, args):
     """Cut a long recording into overs where the level shows activity."""
     overs = []
-    cap = OverCapture(rate, 300, args.hang_ms, args.min_s, 60, lambda pcm, t, s: overs.append(pcm))
+    cap = OverCapture(rate, 300, args.hang_ms, args.min_s, 60, lambda pcm, t, s, ended=True: overs.append(pcm))
     frame = rate // 50
     thresh = 10 ** (args.level_dbfs / 20)
     for i in range(0, len(samples) - frame + 1, frame):

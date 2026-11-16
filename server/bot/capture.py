@@ -59,6 +59,7 @@ class OverCapture:
             self._finish(trim=0, more=busy)
 
     def _finish(self, trim, more=False):
+        """trim: quiet bytes at the end; more: cut off mid-over at max_s (so no repeater tail)."""
         pcm = bytes(self.buf[:len(self.buf) - max(0, trim - self.hang_max // 4)])
         started = self.started
         self.buf = None
@@ -67,7 +68,7 @@ class OverCapture:
             self.started = time.time()
         self.last_end = time.time()
         if len(pcm) >= self.min_bytes:
-            self.on_over(pcm, started, len(pcm) / 2 / self.rate)
+            self.on_over(pcm, started, len(pcm) / 2 / self.rate, not more)
 
 
 # ---- helpers ------------------------------------------------------------------
