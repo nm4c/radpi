@@ -38,7 +38,7 @@ There are two hardware modes, set with `radio.type` in `config.yaml`:
 | `radio.type` | Hardware | Channels |
 |---|---|---|
 | `buttons` (default) | An external radio through the **[RadPi Control HAT](pihat/)** (or hand-wired optos, [docs/HARDWARE.md](docs/HARDWARE.md)) | The radio's own channels, stepped with UP/DOWN presses |
-| `sa818` | The **[RadPi SA818 HAT](sa818s-hat/)**: a 1 W UHF transceiver on the HAT, no external radio | A frequency/tone list in `config.yaml`, set over the module's serial port, plus direct frequency entry. Shows signal strength (RSSI) |
+| `sa818` | The **[RadPi SA818 HAT](sa818s-hat/)**: a 1 W UHF transceiver on the HAT, no external radio | A frequency/tone list in `config.yaml`, set over the module's serial port, plus direct frequency entry and a CTCSS drop-down (with optional tone squelch) per channel. Shows signal strength (RSSI) |
 
 ```
  Browser (phone / PC)                     Raspberry Pi                      Radio  

@@ -134,6 +134,12 @@ button.danger { color: var(--tx); }
   font-variant-numeric: tabular-nums; }
 .tune-hint { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 12px; }
 .tune-hint:empty { display: none; }
+.ctcss { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 4px 0 12px; color: var(--muted); font-size: 14px; }
+.ctcss label { display: flex; align-items: center; gap: 8px; }
+.ctcss select { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; color: var(--text); }
+.ctcss .muted { font-size: 12px; }
+.ctcss-note { font-size: 12px; }
+.ctcss-note:empty { display: none; }
 .selcall, .clips, .fx, .say { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
 .selcall-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .selcall h2, .clips h2, .fx h2, .say h2 { margin: 0; font-size: 15px; }
@@ -266,6 +272,6 @@ button.linkish { background: none; border: none; color: var(--accent); padding: 
 .listen-only #selcallPanel label, .listen-only #selcallHint, .listen-only #selcallPresets,
 .listen-only .clip-actions, .listen-only #recordBtn, .listen-only #recordModeRow, .listen-only #clipList input,
 .listen-only #clipList button, .listen-only #clipsHint, .listen-only .sliders label:nth-child(2),
-.listen-only .micmeter, .listen-only #botModes, .listen-only #botTalkOverRow, .listen-only #sayPanel, .listen-only #botPending .row, .listen-only #botStop,
+.listen-only .micmeter, .listen-only #botModes, .listen-only #botTalkOverRow, .listen-only #ctcssRow, .listen-only #sayPanel, .listen-only #botPending .row, .listen-only #botStop,
 .listen-only .bot-feed button, .listen-only #botPeople button { display: none !important; }
 .record-mode { font-size: 13px; color: var(--muted); }

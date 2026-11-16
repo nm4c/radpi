@@ -104,6 +104,7 @@ class _SerialLink:
 class SA818Radio(Radio):
     kind = "sa818"
     can_tune = True
+    ctcss = CTCSS
 
     def __init__(self, cfg, on_change):
         super().__init__(cfg, on_change)
@@ -133,6 +134,15 @@ class SA818Radio(Radio):
                 pass
         if self._load_state().get("channel") == 0 and self.vfo:
             self.channel = 0
+        # CTCSS picked on the page for a channel, over what config.yaml says: {"3": {tx, rx}}.
+        self.tones = {}
+        for n, t in (self._load_state().get("tones") or {}).items():
+            try:
+                tone_code(t.get("tx_tone")), tone_code(t.get("rx_tone"))
+                if 1 <= int(n) <= len(self.channels):
+                    self.tones[str(int(n))] = {"tx_tone": t.get("tx_tone"), "rx_tone": t.get("rx_tone")}
+            except (AttributeError, TypeError, ValueError):
+                pass
         self.active = None  # settings the module was last given
 
     # ---- configuration ----------------------------------------------------
@@ -164,7 +174,9 @@ class SA818Radio(Radio):
         }
 
     def _current(self):
-        return self.vfo if self.channel == 0 else self.channels[self.channel - 1]
+        if self.channel == 0:
+            return self.vfo
+        return {**self.channels[self.channel - 1], **self.tones.get(str(self.channel), {})}
 
     # ---- info -------------------------------------------------------------
 
@@ -180,6 +192,7 @@ class SA818Radio(Radio):
     def channel_info(self):
         ch = self._current()
         return {
+            "tone_changed": self.channel != 0 and str(self.channel) in self.tones,
             "rx": f"{ch['freq']:.4f}",
             "tx": f"{ch['tx_freq']:.4f}",
             "rx_tone": tone_label(ch["rx_tone"]),
@@ -219,6 +232,45 @@ class SA818Radio(Radio):
                 await self._apply()
             except RadioError:
                 self.vfo, self.channel = old
+                raise
+            finally:
+                self.stepping = False
+                self._save()
+                self._changed()
+
+    async def set_tone(self, tone, squelch=False):
+        """CTCSS for the current channel (or the VFO), from the page: tone in Hz or None for off,
+        always sent; squelch = also only open for stations sending it (tone squelch). Kept per
+        channel until changed again; picking what config.yaml says clears the override."""
+        if tone in (None, "", "off", 0):
+            tone = None
+        else:
+            try:
+                tone = float(tone)
+            except (TypeError, ValueError):
+                raise RadioError("Pick a tone from the list")
+            if not any(abs(t - tone) < 0.05 for t in CTCSS):
+                raise RadioError(f"{tone} Hz isn't a tone the SA818 supports")
+        new = {"tx_tone": tone, "rx_tone": tone if squelch and tone else None}
+        if self.ptt_owner is not None:
+            raise RadioError("Can't change the tone while transmitting")
+        async with self._lock:
+            self.stepping = True
+            self._changed()
+            old = (self.vfo, dict(self.tones))
+            if self.channel == 0:
+                self.vfo = {**self.vfo, **new}
+            else:
+                key, base = str(self.channel), self.channels[self.channel - 1]
+                same = all(tone_label(base[k]) == tone_label(v) for k, v in new.items())
+                if same:
+                    self.tones.pop(key, None)
+                else:
+                    self.tones[key] = new
+            try:
+                await self._apply()
+            except RadioError:
+                self.vfo, self.tones = old
                 raise
             finally:
                 self.stepping = False
@@ -313,9 +365,10 @@ class SA818Radio(Radio):
     # ---- persistence / lifecycle -----------------------------------------
 
     def _state(self):
-        st = {"channel": self.channel}
+        st = {"channel": self.channel, "tones": self.tones}
         if self.vfo:
-            st["vfo"] = {"freq": self.vfo["freq"], "tx_freq": self.vfo["tx_freq"], "tone": self.vfo["tx_tone"]}
+            st["vfo"] = {"freq": self.vfo["freq"], "tx_freq": self.vfo["tx_freq"],
+                         "tx_tone": self.vfo["tx_tone"], "rx_tone": self.vfo["rx_tone"]}
         return st
 
     def close(self):

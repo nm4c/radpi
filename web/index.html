@@ -63,6 +63,14 @@
 
     <div class="channels" id="channelGrid" aria-label="Channels"></div>
 
+    <div class="ctcss" id="ctcssRow" hidden>
+      <label>CTCSS
+        <select id="ctcss" aria-label="CTCSS tone for this channel"></select>
+      </label>
+      <label class="tick"><input type="checkbox" id="ctcssSq"> Tone squelch <span class="muted">(only hear stations sending it)</span></label>
+      <span class="ctcss-note" id="ctcssNote"></span>
+    </div>
+
     <form class="tune" id="tuneForm" hidden autocomplete="off">
       <label>Frequency (MHz)
         <input id="tuneFreq" inputmode="decimal" placeholder="439.1250" required>

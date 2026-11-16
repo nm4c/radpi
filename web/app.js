@@ -485,6 +485,33 @@ function channelLabel(n) {
   return n === 0 ? "VFO" : `CH ${String(n).padStart(2, "0")}`;
 }
 
+// CTCSS for the current channel: a tone (always sent) and, optionally, tone squelch.
+function setupCtcss(tones) {
+  const sel = $("#ctcss");
+  sel.replaceChildren(new Option("Off", ""), ...(tones || []).map((t) => new Option(`${t.toFixed(1)} Hz`, t.toFixed(1))));
+  $("#ctcssRow").hidden = !tones || !tones.length;
+}
+
+function renderCtcss(info, disabled) {
+  const sel = $("#ctcss"), sq = $("#ctcssSq");
+  if (!info || $("#ctcssRow").hidden) return;
+  const tx = info.tx_tone || "";
+  if (document.activeElement !== sel) {
+    if (tx && ![...sel.options].some((o) => o.value === tx)) sel.append(new Option(tx, tx));  // a DCS code from config
+    sel.value = tx;
+  }
+  sq.checked = !!info.rx_tone;
+  sq.disabled = disabled || !tx;
+  sel.disabled = disabled;
+  $("#ctcssNote").textContent = info.rx_tone && info.rx_tone !== tx ? `receive tone ${info.rx_tone}` :
+    info.tone_changed ? "set here (config.yaml says otherwise)" : "";
+}
+
+function sendCtcss() {
+  const tone = $("#ctcss").value;
+  send({ type: "channel", action: "tone", tone: tone || null, squelch: !!tone && $("#ctcssSq").checked });
+}
+
 // Frequency line for the current channel: "439.1250  TX 431.1250  T 91.5  W".
 function freqText(info) {
   if (!info) return "";
@@ -1300,6 +1327,7 @@ function handle(m) {
       S.radio = { type: m.radio_type || "buttons", canSync: m.can_sync !== false, canTune: !!m.can_tune, band: m.band };
       $("#syncBlock").hidden = !S.radio.canSync;
       $("#tuneForm").hidden = !S.radio.canTune;
+      setupCtcss(m.ctcss);
       $("#tuneHint").textContent = S.radio.band ? `${S.radio.band[0]}–${S.radio.band[1]} MHz` : "";
       $("#radioName").textContent = m.radio_name;
       document.title = `${m.radio_name} · RadPi`;
@@ -1485,6 +1513,7 @@ function render() {
     : otherTx ? "IN USE" : "PTT";
 
   $("#tuneForm").querySelector("button").disabled = busyRadio;
+  renderCtcss(st.info, busyRadio || S.role !== "control");
   for (const b of $("#channelGrid").children) {
     b.disabled = busyRadio || S.role !== "control";
     b.classList.toggle("current", Number(b.dataset.ch) === st.channel);
@@ -1533,6 +1562,8 @@ function init() {
     send({ type: "channel", action: "sync", channel: Number($("#syncSelect").value) });
     toast("Channel display updated");
   });
+  $("#ctcss").addEventListener("change", () => { sendCtcss(); $("#ctcss").blur(); });
+  $("#ctcssSq").addEventListener("change", sendCtcss);
   $("#tuneForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const freq = parseFloat($("#tuneFreq").value);

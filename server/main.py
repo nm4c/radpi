@@ -352,6 +352,7 @@ class RemoteHead:
                 "radio_type": self.radio.kind,
                 "can_sync": self.radio.can_sync,
                 "can_tune": self.radio.can_tune,
+                "ctcss": list(getattr(self.radio, "ctcss", ())) or None,   # tones the page can pick
                 "band": list(getattr(self.radio, "band", ())) or None,
                 "max_tx_seconds": self.cfg["ptt"]["max_tx_seconds"],
                 "hold_interval_ms": max(100, self.cfg["ptt"]["hold_timeout_ms"] // 5),
@@ -551,6 +552,8 @@ class RemoteHead:
                     coro = self.radio.goto(int(m["channel"]))
                 elif action == "tune" and self.radio.can_tune:
                     coro = self.radio.tune(float(m["freq"]), m.get("tx_freq") or None, m.get("tone") or None)
+                elif action == "tone" and hasattr(self.radio, "set_tone"):
+                    coro = self.radio.set_tone(m.get("tone"), bool(m.get("squelch")))
                 elif action == "sync":
                     self.radio.sync(int(m["channel"]))
                     log.info("%s synced channel to %s", c.name, self.radio.channel)
@@ -575,6 +578,8 @@ class RemoteHead:
             info = self.radio.channel_info() or {}
             self.audit(c, "tune", freq=m.get("freq"), tx_freq=m.get("tx_freq"), tone=m.get("tone"), **{
                 k: v for k, v in info.items() if k in ("freq",)})
+        elif action == "tone":
+            self.audit(c, "tone", channel=self.radio.channel, tone=m.get("tone"), squelch=bool(m.get("squelch")))
         elif action:
             self.audit(c, "channel", channel=self.radio.channel, name=self.radio.channel_name(self.radio.channel))
 
