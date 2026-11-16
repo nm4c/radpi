@@ -225,6 +225,10 @@ class Agent:
         back to back), then each part goes through as an over of its own. Only the last part can
         be answered: by then the earlier ones have been talked over anyway."""
         b = self.b
+        tail = int(int(b["tail_ms"] or 0) * self.rate / 1000) * 2   # repeater/squelch tail, in bytes
+        if tail and len(pcm) - tail >= int(float(b["min_over_s"]) * self.rate) * 2:
+            pcm = pcm[:len(pcm) - tail]
+            seconds = len(pcm) / 2 / self.rate
         parts, mixed, sims = [(0, len(pcm) // 2)], [False], []
         if self.embedder and b["split_overs"] and seconds >= 2 * turns.WIN_S:
             self._set_stage("identifying")
@@ -267,7 +271,9 @@ class Agent:
         if self.stt:
             self._set_stage("transcribing")
             t0 = time.monotonic()
-            hint = ", ".join(p["name"] for p in self.people.list() if p["kind"] != "anonymous")
+            hint = ""   # names as a hint get read back into tails and noise: only if asked for
+            if b["stt"]["hint_names"]:
+                hint = ", ".join(p["name"] for p in self.people.list() if p["kind"] != "anonymous")
             try:
                 if self.stt.is_async:
                     text = await self.stt.transcribe(samples, hint)

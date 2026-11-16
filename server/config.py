@@ -154,6 +154,7 @@ DEFAULTS = {
         "split_overs": True,        # cut an over where the voice changes (back-to-back or doubled overs)
         "preroll_ms": 300,          # audio kept from before the channel went busy
         "hang_ms": 700,             # an over ends after the channel is quiet this long
+        "tail_ms": 0,               # cut this much off the end of every over: a repeater's tail
         "reply_gap_ms": 1500,       # the channel must be quiet this long before it keys up
         "talk_over": False,         # start-up setting of the web page's "Talk over people" box:
                                     # true = key up as soon as a reply is ready, busy channel or not
@@ -177,6 +178,8 @@ DEFAULTS = {
             "url": None,                  # openai: e.g. http://127.0.0.1:8000/v1
             "api_key": None,
             "prompt": None,               # vocabulary hint (names, callsigns, local places)
+            "filter": True,               # drop what Whisper invents from noise (see bot/stt.py)
+            "hint_names": False,          # give Whisper the names of known people (it reads them back into noise)
         },
         "speaker": {
             "backend": "ecapa",           # ecapa (SpeechBrain), or basic (numpy, rough; for testing)
