@@ -320,5 +320,5 @@ bot:
 #   presets:
 #     - {zone: "UHF CB", number: 6, name: "CB Rpt 6"}
 #     - {zone: "UHF CB", number: 40, name: "CB Ch 40"}
-#     - {zone: "LINKS", number: 36, name: "36 Link"}
-#   zones: ["UHF CB", "LINKS", "IDAS"]   # optional: every zone in RIGHT order, so it goes the short way
+#     - {zone: "ZONE 2", number: 3, name: "SITE 3"}
+#   zones: ["UHF CB", "ZONE 2", "ZONE 3"]   # optional: every zone in RIGHT order, so it goes the short way

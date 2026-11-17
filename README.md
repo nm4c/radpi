@@ -1,17 +1,21 @@
 # RadPi
 
-RadPi puts a two-way radio on the web. A Raspberry Pi sits next to a radio, or carries its own
-transceiver on a HAT, and anyone with a browser can listen, talk and run the radio from
-anywhere, on a phone or a PC.
+RadPi puts a two-way radio on the web. A Raspberry Pi sits next to a radio, carries its own
+transceiver on a HAT, or takes the place of an Icom radio's network mic, and anyone with a
+browser can listen, talk and run the radio from anywhere, on a phone or a PC.
 
 - **Remote operation:** receive audio and push-to-talk with low-latency WebRTC audio. Change
   channels or tune frequencies on a radio-style control head (a desk head on wide screens, a
   handheld on phones).
-- **Two hardware options:**
+- **Three hardware options:**
   - The **RadPi Control HAT** drives an existing radio through its mic connector. It works with
     most land-mobile and UHF CB radios.
   - The **RadPi SA818 HAT** has a built-in 1 W UHF transceiver, with frequencies, CTCSS/DCS,
     a VFO and signal strength.
+  - An **Icom IC-F6330D with its IP remote mic** needs no HAT at all. The Pi joins the network
+    in the mic's place and speaks its protocol (reverse engineered from packet captures), so PTT,
+    keys, audio and the radio's own screen all go over IP. The page draws the mic with its live
+    LCD and LED, and channel presets jump across zones by typing the channel number.
 - **On-air tools:** selcall (send and decode), audio clips played to air, text to speech in a
   choice of voices (Australian male and female included), recording of the channel, voice
   effects, and TX tone control.
@@ -33,11 +37,16 @@ anywhere, on a phone or a PC.
   <img src="docs/images/radpi-phone.png" alt="RadPi on a phone: a handheld-radio control head showing channel 1, Simplex, 477.1250 MHz, with the PTT button below" width="24%">
 </p>
 
-There are two hardware modes, set with `radio.type` in `config.yaml`:
+<p align="center">
+  <img src="docs/images/radpi-icom.png" alt="RadPi with an Icom IC-F6330D: the drawn IP mic with its LCD showing CB Rpt 1 and a green receive LED, the PTT button, and preset buttons for UHF CB repeaters and channels" width="34%">
+</p>
+
+There are three hardware modes, set with `radio.type` in `config.yaml`:
 
 | `radio.type` | Hardware | Channels |
 |---|---|---|
 | `buttons` (default) | An external radio through the **[RadPi Control HAT](pihat/)** (or hand-wired optos, [docs/HARDWARE.md](docs/HARDWARE.md)) | The radio's own channels, stepped with UP/DOWN presses |
+| `icom` | An **Icom IC-F6330D** with its PoE IP mic: the Pi takes the mic's network address, no HAT or wiring. See [Icom IP mic radio](#icom-ip-mic-radio-ic-f6330d) | Presets (zone, channel number, name): the Pi changes zone with LEFT/RIGHT, types the number, and confirms each change from the radio's screen. Channel changes made on the radio are followed |
 | `sa818` | The **[RadPi SA818 HAT](sa818s-hat/)**: a 1 W UHF transceiver on the HAT, no external radio | A frequency/tone list in `config.yaml`, set over the module's serial port, plus direct frequency entry and a CTCSS drop-down (with optional tone squelch) per channel. Shows signal strength (RSSI) |
 
 ```
@@ -74,6 +83,9 @@ There are two hardware modes, set with `radio.type` in `config.yaml`:
   See [Control head](#control-head).
 - With the RadPi SA818 HAT: frequencies, repeater offsets and CTCSS/DCS per channel, a VFO for any
   frequency in the band, and an RSSI bar on the display.
+- With an Icom IC-F6330D: the radio's own mic drawn on the page, mirroring its screen, LED and
+  keys, with every key (P1-P4, keypad, zone, squelch, volume, menu, power) pressed on the real
+  radio. See [Icom IP mic radio](#icom-ip-mic-radio-ic-f6330d).
 - Several operators can listen at once. Only one can transmit, and the others see who's on air.
 - Personal accounts with **control** (everything) or **listen** (hear only) roles, an audit log of
   who did what, and login lockout. See [Accounts and security](#accounts-and-security).
