@@ -91,6 +91,11 @@ button.danger { color: var(--tx); }
 .radio-head svg[data-template="handheld"] { width: auto; max-width: 100%; max-height: 62vh; margin: 0 auto; }
 /* The IC-F6330D mic (radio.type icom): tall, so capped like the handheld. */
 .radio-head svg[data-template="ipmic"] { width: auto; max-width: 100%; max-height: 72vh; margin: 0 auto; }
+/* No knobs on the mic: a swipe on it scrolls the page (it fills most of a phone's screen), and
+   only the keys keep the touch for themselves, so a held key doesn't scroll. */
+.radio-head svg[data-template="ipmic"] { touch-action: pan-y; }
+.radio-head svg[data-template="ipmic"] .mkey { touch-action: none; }
+@media (max-width: 600px) { .radio-head svg[data-template="ipmic"] { max-height: 60vh; } }
 .radio-head .mkey { cursor: pointer; }
 .radio-head .mkey.pressed { fill: rgba(255, 255, 255, .22); }
 .radio-head .mkey[data-ptt].pressed { fill: rgba(229, 72, 77, .35); }

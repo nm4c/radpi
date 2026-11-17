@@ -429,6 +429,9 @@ function mountMic(svg) {
       } else send({ type: "mic_key", key: el.dataset.key, down: false });
     };
     el.addEventListener("pointerdown", (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); start(); });
+    // iOS Safari scrolls from a touch on an SVG shape whatever touch-action says: stop it here,
+    // on the keys only, so the rest of the mic still scrolls the page.
+    el.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
     el.addEventListener("pointerup", end);
     el.addEventListener("pointercancel", end);
     el.addEventListener("lostpointercapture", end);
