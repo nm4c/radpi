@@ -28,3 +28,6 @@ sa818s-hat/.history/
 # Operator accounts, sessions and the audit log
 radio.db
 radio.db-*
+
+# packet captures (may hold radio traffic)
+captures/

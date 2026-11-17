@@ -436,6 +436,28 @@ miss UHF CB. The screen is only redrawn when something on it changes. Listen on 
 with the display on and off once: there should be no difference. To check the layout without the
 hardware, set `gpio.backend: mock` and `display.mock_file: display.png`.
 
+## Icom IP mic radio (IC-F6330D)
+
+An Icom radio whose mic is a network device (the IC-F6330D's PoE IP mic) needs no HAT at all:
+RadPi takes the mic's place on the network and speaks its protocol, which was worked out from
+packet captures (`docs/ICOM-IP-MIC.md`). PTT, channel keys, the radio's screen and both directions
+of audio all go over IP. The page draws the mic instead of the control head: its LCD and LED show
+what the radio sends to the real mic, and its keys (P1-P4, the D-pad, the keypad, SIDE, VOL, EMERG
+and power) are pressed on the radio, held for as long as you hold them. The side PTT bar is the
+page's PTT. Selcall and clips get Send and Play buttons on the page, since the mic's keys belong
+to the radio.
+
+1. Give the Pi the mic's IP address (and unplug the mic), or program the radio with the Pi's.
+   The radio connects to that address on TCP 52001; audio is RTP on UDP 50000 both ways.
+2. In `config.yaml`: `radio.type: icom`, an `icom:` section (`radio_ip`, gains), and
+   `channel.count` / `channel.names` with the names exactly as the radio's screen shows them.
+   Channel picks on the page press UP/DOWN and wait for each new name, and a channel changed on
+   the radio itself is followed too.
+3. Set `icom.tx_gain` by ear on air: the radio expects mic level, and too much over-deviates.
+
+There is no login or encryption in this protocol: keep it on a private network or VPN.
+`python -m server.icom_cli` is a stand-alone mic for trying it from a terminal.
+
 ## Install on the Pi
 
 1. Build the interface: see **[docs/HARDWARE.md](docs/HARDWARE.md)**. It has generic wiring plus IC-F621 notes.
@@ -559,6 +581,7 @@ Make personal accounts, then `sudo radpi-users delete operator` and remove `pass
 
 ## Channel tracking
 
+(An Icom IP mic radio reads its channel from the radio's screen instead: see above.)
 Mic-line button emulation can't read the channel back from the radio, so the Pi **tracks the
 channel itself** and remembers it across restarts (`state.json`). If someone changes
 channel on the radio's front panel, open **Settings → Set current channel** in the UI to

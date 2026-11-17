@@ -33,7 +33,7 @@ PENDING_PER_IP = 8      # WebSocket connections from one address that haven't lo
 AUTH_RECHECK_S = 5      # how often connected operators are re-checked against the user database
 
 # Messages only 'control' accounts may send. Everything else a 'listen' account sends is ignored.
-CONTROL_MESSAGES = {"ptt", "ptt_hold", "channel", "selcall", "voice_fx", "record",
+CONTROL_MESSAGES = {"ptt", "ptt_hold", "channel", "mic_key", "mic_power", "selcall", "voice_fx", "record",
                     "clip_play", "clip_stop", "clip_delete", "clip_rename", "say", "say_stop",
                     "bot_mode", "bot_approve", "bot_reject", "bot_stop", "bot_enrol", "bot_rename", "bot_forget", "bot_talk_over"}
 
@@ -110,7 +110,7 @@ class RemoteHead:
         self.pending = {}         # ip -> WebSocket connections not yet logged in
         self._tx = None           # the transmission in progress, for the audit log
         self._migrate_password()
-        self.audio = create_audio(cfg, self._on_rx_audio)
+        self.audio = create_audio(cfg, self._on_rx_audio, self.radio)
         self._tasks = set()
         self._ptt_gen = 0
         self.rtc_ok = rtc.setup(cfg)
@@ -240,6 +240,7 @@ class RemoteHead:
             "say_tx": {k: self.say_tx[k] for k in ("text", "voice", "by")} if self.say_tx else None,
             "recording": self.recorder.status() if self.recorder else None,
             "fx": c.fx,
+            "mic": r.mic_state() if hasattr(r, "mic_state") else None,   # IP mic radios: screen, LED
         }
 
     def broadcast_state(self):
@@ -402,6 +403,8 @@ class RemoteHead:
             if self.radio.ptt_owner == c.id:
                 self.radio.unkey("operator disconnected")
                 self.audio.clear_tx()
+            if hasattr(self.radio, "release"):
+                self.radio.release(c.id)          # keys held down on the page's mic
             c.sender.cancel()
             if c.rtc:
                 self._spawn(self._rtc_close(c))
@@ -539,6 +542,10 @@ class RemoteHead:
                 if text:
                     c.send_json({"type": "notice", "level": "warn", "text": text})
             return
+        if kind in ("mic_key", "mic_power"):
+            if self.radio.kind == "icom":
+                self._mic_message(c, kind, m)
+            return
         if kind == "ptt_hold":
             c.last_hold = time.monotonic()
         elif kind == "ptt":
@@ -572,6 +579,24 @@ class RemoteHead:
                 c.send_json({"type": "notice", "level": "warn", "text": str(e)})
                 return
             self._spawn(self._channel(c, coro, action, m))
+
+    def _mic_message(self, c, kind, m):
+        """Keys pressed on the IC-F6330D mic drawn on the page: passed to the radio as they are
+        (down, then up), so holds work as on the real mic."""
+        try:
+            if kind == "mic_power":
+                self.audit(c, "power")
+                self._spawn(self._channel(c, self.radio.power()))
+                return
+            key = str(m.get("key"))
+            down = bool(m.get("down"))
+            if down and self.radio.ptt_owner is not None and self.radio.ptt_owner != c.id:
+                raise RadioError("Radio is in use by another operator")
+            self.radio.press(c.id, key, down)
+            if down:
+                log.info("%s pressed %s on the mic", c.name, key)
+        except RadioError as e:
+            c.send_json({"type": "notice", "level": "warn", "text": str(e)})
 
     async def _channel(self, c, coro, action=None, m=None):
         try:

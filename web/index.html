@@ -95,6 +95,8 @@
         <input id="selcallDigits" inputmode="numeric" maxlength="20" autocomplete="off" placeholder="12345">
       </label>
       <p class="selcall-hint" id="selcallHint">Press Call on the radio to send.</p>
+      <!-- Only with the IC-F6330D mic face, whose keys belong to the real radio. -->
+      <button type="button" class="primary" id="selcallSend" hidden>Send selcall</button>
       <div class="selcall-presets" id="selcallPresets"></div>
       <ol class="selcall-log" id="selcallLog" aria-label="Recent selcalls"></ol>
     </section>
@@ -119,6 +121,7 @@
       <p class="clip-empty" id="clipEmpty">No clips yet. Upload an MP3 to add one.</p>
       <p class="selcall-hint" id="clipsHint">Pick a clip, then press Play on the radio to transmit it.</p>
       <div class="clip-actions">
+        <button type="button" class="primary" id="clipPlayBtn" hidden>Play on air</button>
         <button type="button" id="clipUpload">Upload audio…</button>
         <input type="file" id="clipFile" accept="audio/*,.mp3,.m4a,.wav,.ogg" multiple hidden>
         <span class="clip-progress" id="clipProgress" aria-live="polite"></span>
@@ -152,7 +155,7 @@
     <section class="fx" id="fxPanel" hidden aria-labelledby="fxTitle">
       <div class="selcall-top">
         <h2 id="fxTitle">Voice effects</h2>
-        <span class="selcall-std">P / P1 on the radio</span>
+        <span class="selcall-std" id="fxKeyHint">P / P1 on the radio</span>
       </div>
       <div class="fx-presets" id="fxPresets" role="group" aria-label="Voice effect"></div>
       <button type="button" id="fxToggle" class="fx-toggle">Switch on</button>

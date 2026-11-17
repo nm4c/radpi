@@ -362,7 +362,10 @@ class MockAudio:
         self.tx.clear()
 
 
-def create_audio(cfg, on_rx):
+def create_audio(cfg, on_rx, radio=None):
+    if cfg["radio"]["type"] == "icom":          # audio comes over IP from the radio itself
+        from .icom import IcomAudio
+        return IcomAudio(cfg, on_rx, radio)
     backend = cfg["audio"]["backend"]
     if backend == "mock":
         return MockAudio(cfg, on_rx)

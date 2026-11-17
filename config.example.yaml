@@ -9,6 +9,9 @@ radio:
   #            PTT + channel UP/DOWN pressed on the mic lines. Uses gpio: and channel.count/names.
   #   sa818    the RadPi SA818 HAT (sa818s-hat/): built-in UHF transceiver, frequencies set over the UART.
   #            Uses the sa818: section and channel.list. See "RadPi SA818 HAT" at the end of this file.
+  #   icom     an Icom radio with an IP remote mic (IC-F6330D): the Pi takes the mic's place on the
+  #            network. No HAT or GPIO. Uses the icom: section and channel.count/names, with the
+  #            names exactly as the radio's screen shows them. See "Icom IP mic radio" at the end.
   type: buttons
 
 server:
@@ -293,3 +296,18 @@ bot:
     api_key: null
     region: null
     speed: 1.0
+
+# ---- Icom IP mic radio (radio.type: icom) -------------------------------------------------
+# The radio connects to the mic's IP address, so give the Pi that address (and unplug the mic)
+# or program the radio with the Pi's. audio.backend/devices and gpio: aren't used: PTT, keys, the
+# screen and the audio all go over the network (docs/ICOM-IP-MIC.md). Name the channels exactly as
+# the radio's screen shows them, in UP order, so RadPi can confirm channel changes and follow
+# changes made on the radio:
+#   channel:
+#     count: 8
+#     names: {1: "CB Rpt 1", 2: "CB Rpt 2", 3: "CB Rpt 3"}
+# icom:
+#   listen: 0.0.0.0       # where the radio connects: TCP 52001, RTP on UDP 50000
+#   radio_ip: 192.0.2.10  # only accept the radio from this address
+#   rx_gain: 4.0          # the radio sends audio at about -43 dBFS: this brings it up 12 dB
+#   tx_gain: 0.25         # the radio expects mic level; higher over-deviates. Set by ear on air.

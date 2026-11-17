@@ -31,6 +31,7 @@ const S = {
   releaseTimer: null,
   statsTimer: null,
   head: null,          // radioHead from control_head.js, once the control head has loaded
+  mic: null,           // the IC-F6330D mic SVG instead, when radio.type is icom
   headShown: {},       // what the head's screen shows now, so unchanged fields aren't redrawn
   meter: null,         // last "meter" message (RX level, busy, RSSI)
   pending: null,       // channel picked on the head but not yet confirmed: {n, sent, timer}
@@ -344,6 +345,7 @@ async function loadHead() {
   try {
     await loadScript(`${HEAD_DIR}/radio_config.js`);
     await loadScript(`${HEAD_DIR}/control_head.js`);
+    S.headReady = true;
     await mountHead();
   } catch (err) {
     console.error("Control head unavailable:", err);
@@ -354,15 +356,25 @@ async function loadHead() {
   PHONE_LAYOUT.addEventListener("change", () => mountHead().catch((err) => console.error(err)));
 }
 
+// Which face to draw: the IC-F6330D mic for an Icom IP mic radio, else the desk head or handheld.
+function headFile() {
+  if (S.radio.type === "icom") return "ic-f6330d.svg";
+  return PHONE_LAYOUT.matches ? "handheld.svg" : "control-head.svg";
+}
+
 async function mountHead() {
-  const file = PHONE_LAYOUT.matches ? "handheld.svg" : "control-head.svg";
+  const file = headFile();
   const res = await fetch(`${HEAD_DIR}/${file}`);
   if (!res.ok) throw new Error(`${file}: HTTP ${res.status}`);
   const text = await res.text();
-  if (file !== (PHONE_LAYOUT.matches ? "handheld.svg" : "control-head.svg")) return; // changed meanwhile
+  if (file !== headFile()) return; // changed meanwhile
   const box = $("#radio");
   box.innerHTML = text; // our own generated file, same origin
+  S.mountedHead = file;
   const svg = box.querySelector("svg");
+  if (file === "ic-f6330d.svg") { mountMic(svg); return; }
+  S.mic = null;
+  applyFaceHints();
   const head = createRadioHead(svg); // from control_head.js
   S.head = head;
   S.headSoftkeyCount = svg.querySelectorAll('[id^="display-softkey-"]').length;
@@ -370,6 +382,86 @@ async function mountHead() {
   head.setVolume(Number($("#vol").value) * VOLUME_KNOB_UNITY);
   head.on((e) => { if (S.head === head) onHeadEvent(e); });
   updateHead();
+}
+
+// ---------- IC-F6330D mic (radio.type icom) ----------
+// The radio's own screen, LED and keys, mirrored from the IP mic protocol (docs/ICOM-IP-MIC.md).
+// Keys go to the radio as they are: down when pressed, up when let go, so holds (EMERG for the
+// menu, SIDE to open the squelch) work as on the real mic. The side PTT bar is the page's PTT.
+// The power key needs a 1.5 s hold here before anything is sent.
+const MIC_POWER_HOLD_MS = 1500;
+const MIC_LCD = { lit: "#cfdccb", dim: "#9aa39a", off: "#6f766e" };
+const MIC_LED = { off: "#26302a", red: "#ff3b30", green: "#38e05a", both: "#ffae2e" };
+
+// With the mic face, the page's own buttons do what the drawn head's soft keys did.
+function applyFaceHints() {
+  const mic = !!S.mic;
+  $("#selcallSend").hidden = !mic;
+  $("#clipPlayBtn").hidden = !mic;
+  $("#selcallHint").textContent = mic ? "" : "Press Call on the radio to send.";
+  $("#clipsHint").textContent = mic ? "Pick a clip, then press Play on air." : "Pick a clip, then press Play on the radio to transmit it.";
+  $("#fxKeyHint").textContent = mic ? "" : "P / P1 on the radio";
+}
+
+function mountMic(svg) {
+  S.head = null;
+  S.mic = svg;
+  applyFaceHints();
+  svg.querySelectorAll(".mkey").forEach((el) => {
+    let down = false, timer = null;
+    const start = () => {
+      if (down) return;
+      if (S.role !== "control") { listenOnlyToast(); return; }
+      down = true;
+      el.classList.add("pressed");
+      if (el.dataset.ptt) pttPress();
+      else if (el.dataset.power) {
+        timer = setTimeout(() => { timer = null; send({ type: "mic_power" }); toast("Power key sent to the radio"); }, MIC_POWER_HOLD_MS);
+      } else send({ type: "mic_key", key: el.dataset.key, down: true });
+    };
+    const end = () => {
+      if (!down) return;
+      down = false;
+      el.classList.remove("pressed");
+      if (el.dataset.ptt) pttRelease();
+      else if (el.dataset.power) {
+        if (timer) { clearTimeout(timer); timer = null; toast("Hold the power key to switch the radio on or off"); }
+      } else send({ type: "mic_key", key: el.dataset.key, down: false });
+    };
+    el.addEventListener("pointerdown", (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); start(); });
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+    el.addEventListener("lostpointercapture", end);
+  });
+  updateMic();
+}
+
+function updateMic() {
+  const st = S.server, svg = S.mic;
+  if (!svg || !st || !st.mic) return;
+  const m = st.mic;
+  const on = m.link && m.powered !== false;
+  svg.getElementById("mic-lcd").setAttribute("fill", !on ? MIC_LCD.off : m.backlight ? MIC_LCD.lit : MIC_LCD.dim);
+  const led = m.red && m.green ? "both" : m.red ? "red" : m.green ? "green" : "off";
+  svg.getElementById("mic-led").setAttribute("fill", MIC_LED[led]);
+  const text = on ? m.text : "";
+  const el = svg.getElementById("mic-text");
+  if (el.textContent !== text) {
+    el.textContent = text;
+    el.removeAttribute("textLength");
+    if (text && el.getComputedTextLength() > +el.dataset.maxWidth) {
+      el.setAttribute("textLength", el.dataset.maxWidth);
+      el.setAttribute("lengthAdjust", "spacingAndGlyphs");
+    }
+  }
+  svg.getElementById("mic-sub").textContent = !m.link ? "waiting for the radio" : m.powered === false ? "radio off"
+    : st.stepping ? "changing channel" : "";
+  svg.getElementById("mic-status").textContent = m.red ? "TX" : "";
+  svg.querySelectorAll(".mic-flag").forEach((f) => {
+    const name = f.dataset.flag;
+    f.style.visibility = (name === "link" ? on : on && m.flags && m.flags[name]) ? "visible" : "hidden";
+  });
+  $("#radio").classList.toggle("tx", !!(st.ptt && st.ptt.mine));
 }
 
 // Soft keys for the current radio, laid out for the template's 3 or 5 keys.
@@ -536,6 +628,7 @@ function signalBars(m) {
 // Only fields that changed are sent, because setDisplay re-measures text to fit it.
 function updateHead() {
   const st = S.server;
+  if (S.mic) { updateMic(); renderRecording(); return; }
   if (!S.head || !st) return;
   const p = st.ptt;
   const m = S.meter;
@@ -873,6 +966,7 @@ function clock(s) {
 
 // The record line in the clips panel. Called from updateHead, so it ticks every 250 ms.
 function renderRecording() {
+  if (S.clips) $("#clipPlayBtn").textContent = S.server && S.server.clip_tx ? "Stop" : "Play on air";
   if (!S.clips || !S.clips.record) return;
   const rec = S.server && S.server.recording;
   $("#recordVox").disabled = !!rec; // the mode is set when a recording starts
@@ -881,7 +975,7 @@ function renderRecording() {
   $("#recordBtn").textContent = rec ? "Stop recording" : "Record";
   if (!rec) {
     $("#recordState").textContent = S.role !== "control" ? "Not recording."
-      : `Not recording. Press the orange button to record what the radio hears, in ${Number(S.clips.record_minutes.toFixed(1))} minute parts.`;
+      : `Not recording. Press ${S.mic ? "Record" : "the orange button"} to record what the radio hears, in ${Number(S.clips.record_minutes.toFixed(1))} minute parts.`;
     return;
   }
   const t = S.recBase != null ? (performance.now() - S.recBase) / 1000 : rec.seconds;
@@ -1325,6 +1419,9 @@ function handle(m) {
     case "hello":
       S.channels = m.channels;
       S.radio = { type: m.radio_type || "buttons", canSync: m.can_sync !== false, canTune: !!m.can_tune, band: m.band };
+      // The radio type decides the face (the IC-F6330D mic for icom). A mount still loading
+      // re-checks the type when it lands, so this only has to cover one that already finished.
+      if (S.headReady && S.mountedHead !== headFile()) mountHead().catch((err) => console.error(err));
       $("#syncBlock").hidden = !S.radio.canSync;
       $("#tuneForm").hidden = !S.radio.canTune;
       setupCtcss(m.ctcss);
@@ -1600,6 +1697,8 @@ function init() {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sayNow(); }
   });
   $("#recordBtn").addEventListener("click", toggleRecord);
+  $("#selcallSend").addEventListener("click", sendSelcall);
+  $("#clipPlayBtn").addEventListener("click", playClip);
   $("#fxToggle").addEventListener("click", toggleFx);
   $("#recordVox").addEventListener("change", (e) => store.set("recordVox", e.target.checked ? "1" : "0"));
   $("#clipFile").addEventListener("change", (e) => {

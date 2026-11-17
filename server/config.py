@@ -13,8 +13,8 @@ log = logging.getLogger("config")
 DEFAULTS = {
     "radio": {
         "name": "Radio",
-        "type": "buttons",   # buttons = external radio via the RadPi Control HAT, sa818 = RadPi SA818 HAT
-    },
+        "type": "buttons",   # buttons = external radio via the RadPi Control HAT, sa818 = RadPi SA818 HAT,
+    },                       # icom = Icom radio with an IP remote mic (IC-F6330D), RadPi in the mic's place
     "server": {
         "host": "0.0.0.0",
         "port": 8080,
@@ -36,6 +36,14 @@ DEFAULTS = {
         "busy_pin": None,
         "busy_pull_up": True,
         "busy_invert": False,
+    },
+    "icom": {                       # radio.type icom (server/icom.py, docs/ICOM-IP-MIC.md)
+        "listen": "0.0.0.0",        # the radio connects here: TCP 52001 and RTP on UDP 50000
+        "radio_ip": None,           # only accept the radio from this address
+        "rx_gain": 4.0,             # the radio sends audio at about -43 dBFS: bring it up
+        "tx_gain": 0.25,            # and expects mic level (peaks about -18 dBFS); too high over-deviates
+        "ident": None,              # hex ID sent to the radio (default: the captured mic's)
+        "radio_rtp_port": 50000,    # the radio's RTP port (always 50000 on a real radio; for testing)
     },
     "sa818": {
         "port": "/dev/serial0",
@@ -237,7 +245,9 @@ def _check_display(cfg):
                                                    if (d["buttons"] or {}).get(k, "none") != "none"}
     g = cfg["gpio"]
     radio = {g["ptt_pin"], g["busy_pin"]}
-    if cfg["radio"]["type"] == "buttons":
+    if cfg["radio"]["type"] == "icom":
+        radio = set()               # no GPIO: everything goes over the network
+    elif cfg["radio"]["type"] == "buttons":
         radio |= {g["up_pin"], g["down_pin"]}
     else:
         radio |= {cfg["sa818"]["pd_pin"], cfg["sa818"]["low_power_pin"]}
@@ -284,9 +294,21 @@ def load(path):
     if not 100 <= float(a["tx_bass_hz"]) <= 1500 or not 1000 <= float(a["tx_treble_hz"]) <= 6000:
         raise SystemExit("config: audio.tx_bass_hz must be 100-1500 and audio.tx_treble_hz 1000-6000")
     kind = cfg["radio"]["type"]
-    if kind not in ("buttons", "sa818"):
-        raise SystemExit("config: radio.type must be buttons or sa818")
-    if kind == "buttons" and int(cfg["channel"]["count"]) < 1:
+    if kind not in ("buttons", "sa818", "icom"):
+        raise SystemExit("config: radio.type must be buttons, sa818 or icom")
+    if kind == "icom":
+        i = cfg["icom"]
+        if int(a["wire_rate"]) % 8000:
+            raise SystemExit("config: audio.wire_rate must be a multiple of 8000 for radio.type icom")
+        for key in ("rx_gain", "tx_gain"):
+            if not 0 < float(i[key]) <= 20:
+                raise SystemExit(f"config: icom.{key} must be more than 0 and at most 20")
+        if i.get("ident"):
+            try:
+                bytes.fromhex(str(i["ident"]))
+            except ValueError:
+                raise SystemExit("config: icom.ident must be hex") from None
+    if kind in ("buttons", "icom") and int(cfg["channel"]["count"]) < 1:
         raise SystemExit("config: channel.count must be >= 1")
     if kind == "sa818":
         g, s = cfg["gpio"], cfg["sa818"]

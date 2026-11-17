@@ -7,6 +7,8 @@ Two kinds of radio, chosen with `radio.type` in config.yaml:
            channel back, so it's tracked here in software; if it drifts (someone pressed a button
            on the radio), "sync" tells the server the true channel.
   sa818    The RadPi SA818 HAT: a built-in transceiver set over its serial port (see sa818.py).
+  icom     An Icom radio with an IP remote mic (IC-F6330D): RadPi takes the mic's place on the
+           network, so PTT, keys, the screen and the audio all go over IP (see icom.py).
 
 Both share PTT handling, the busy input, the channel list and remembering the last channel.
 """
@@ -69,8 +71,8 @@ class Radio:
     def __init__(self, cfg, on_change):
         g, c = cfg["gpio"], cfg["channel"]
         self.backend = g["backend"]
-        self._ptt = gpio_output(self.backend, g["ptt_pin"], g["active_high"], "PTT")
-        self._busy = gpio_input(self.backend, g["busy_pin"], g["busy_pull_up"])
+        self._ptt = self._make_ptt(cfg)
+        self._busy = self._make_busy(cfg)
         self._busy_invert = bool(g.get("busy_invert", False))
 
         self.wrap = bool(c["wrap"])
@@ -84,6 +86,14 @@ class Radio:
         self.count = 1
         self.names = {}
         self.channel = 1
+
+    def _make_ptt(self, cfg):
+        g = cfg["gpio"]
+        return gpio_output(self.backend, g["ptt_pin"], g["active_high"], "PTT")
+
+    def _make_busy(self, cfg):
+        g = cfg["gpio"]
+        return gpio_input(self.backend, g["busy_pin"], g["busy_pull_up"])
 
     def _init_channels(self, count, names, start):
         self.count = count
@@ -269,6 +279,10 @@ class ButtonRadio(Radio):
 
 def create_radio(cfg, on_change):
     kind = cfg["radio"]["type"]
+    if kind == "icom":
+        from .icom import IcomRadio
+
+        return IcomRadio(cfg, on_change)
     if kind == "sa818":
         from .sa818 import SA818Radio
 
