@@ -161,6 +161,11 @@ class RemoteHead:
         if cfg["bot"]["enabled"]:
             from .bot import Agent
             self.bot = Agent(cfg, self)
+        # The screen on the Pi (display.enabled): Pimoroni Display HAT Mini.
+        self.display = None
+        if cfg["display"]["enabled"]:
+            from .display import Display
+            self.display = Display(cfg, self)
 
     def _migrate_password(self):
         """First start with the user database: the old shared server.password becomes a
@@ -1152,6 +1157,7 @@ class RemoteHead:
         app["watchdog"] = asyncio.create_task(self.watchdog())
         app["radio"] = asyncio.create_task(self.radio.run())
         app["bot"] = asyncio.create_task(self.bot.run()) if self.bot else None
+        app["display"] = asyncio.create_task(self.display.run()) if self.display else None
 
     async def on_shutdown(self, app):
         self.radio.unkey("shutdown")
@@ -1162,7 +1168,7 @@ class RemoteHead:
             await c.ws.close(code=1001, message=b"server shutdown")
 
     async def on_cleanup(self, app):
-        for key in ("watchdog", "radio", "bot"):
+        for key in ("watchdog", "radio", "bot", "display"):
             if app[key] is None:
                 continue
             app[key].cancel()
@@ -1170,6 +1176,8 @@ class RemoteHead:
                 await app[key]
             except (asyncio.CancelledError, Exception):
                 pass
+        if self.display:
+            self.display.close()
         self.radio.close()
         self.audio.stop()
         if self.recorder:

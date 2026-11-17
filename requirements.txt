@@ -5,3 +5,5 @@ sounddevice>=0.4.6
 pyserial>=3.5
 aiortc>=1.9
 gpiozero>=2.0 ; platform_machine == "aarch64" or platform_machine == "armv7l"
+Pillow>=9.0                # display: drawing the screen
+spidev>=3.6 ; platform_machine == "aarch64" or platform_machine == "armv7l"

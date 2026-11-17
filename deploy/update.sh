@@ -70,6 +70,8 @@ if (( pull )); then
 fi
 
 command -v rsync >/dev/null || apt-get install -y rsync
+# The Display HAT Mini (display: in config.yaml) needs the SPI device.
+getent group spi >/dev/null && ! id -nG radio | grep -qw spi && usermod -aG spi radio
 
 # Compare before copying, so we know what needs more than a file copy.
 reqs_changed=0

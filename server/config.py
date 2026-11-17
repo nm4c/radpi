@@ -1,11 +1,14 @@
 """Configuration loading with defaults."""
 
 import copy
+import logging
 from pathlib import Path
 
 import yaml
 
 from . import selcall
+
+log = logging.getLogger("config")
 
 DEFAULTS = {
     "radio": {
@@ -77,6 +80,14 @@ DEFAULTS = {
         "tx_treble_db": -3,       #   treble shelf: cut (negative) or boost above this frequency
         "tx_treble_hz": 2500,
         "busy_threshold_dbfs": -45,
+    },
+    "display": {                    # Pimoroni Display HAT Mini on the Pi (server/display.py)
+        "enabled": False,
+        "spi_hz": 20_000_000,       # harmonics every 20 MHz: 460, 480 MHz, clear of UHF CB
+        "rotate": 180,              # 180 = the HAT's usual way up; 0 if it's upside down in your case
+        "sleep_s": 0,               # backlight off after this long with nothing happening (0 = never)
+        "buttons": {"a": "channel_up", "b": "channel_down", "x": "page", "y": "backlight"},
+        "mock_file": None,          # gpio.backend mock: write each frame to this PNG instead
     },
     "selcall": {
         "enabled": True,
@@ -217,6 +228,33 @@ DEFAULTS = {
 }
 
 
+def _check_display(cfg):
+    d = cfg["display"]
+    if not d["enabled"]:
+        return
+    from .display import ACTIONS, LED_PINS, PINS, SPI_PINS
+    used = set(SPI_PINS) | {PINS["backlight"]} | {PINS[k] for k in ("a", "b", "x", "y")
+                                                   if (d["buttons"] or {}).get(k, "none") != "none"}
+    g = cfg["gpio"]
+    radio = {g["ptt_pin"], g["busy_pin"]}
+    if cfg["radio"]["type"] == "buttons":
+        radio |= {g["up_pin"], g["down_pin"]}
+    else:
+        radio |= {cfg["sa818"]["pd_pin"], cfg["sa818"]["low_power_pin"]}
+    clash = used & (radio - {None})
+    if clash:
+        raise SystemExit(f"config: the display needs GPIO {sorted(clash)}, which the radio uses")
+    for k, action in (d["buttons"] or {}).items():
+        if k not in ("a", "b", "x", "y") or action not in ACTIONS:
+            raise SystemExit(f"config: display.buttons: {k}: {action} (buttons a, b, x, y; actions {', '.join(ACTIONS)})")
+    if int(d["rotate"]) % 360 not in (0, 180):
+        raise SystemExit("config: display.rotate must be 0 or 180")
+    if not 1_000_000 <= int(d["spi_hz"]) <= 62_500_000:
+        raise SystemExit("config: display.spi_hz must be 1-62.5 MHz")
+    if radio & set(LED_PINS):
+        log.warning("display: take the Display HAT Mini's RGB LED off: it's on GPIO 17/27/22, which the radio uses")
+
+
 def _merge(base, over):
     out = copy.deepcopy(base)
     for key, value in (over or {}).items():
@@ -256,6 +294,7 @@ def load(path):
         if clash:
             raise SystemExit(f"config: GPIO {sorted(clash)} used twice (gpio vs sa818 pins)")
 
+    _check_display(cfg)
     _check_selcall(cfg["selcall"])
     _check_clips(cfg["clips"], cfg["ptt"])
     _check_record(cfg["record"])

@@ -97,6 +97,16 @@ audio:
   tx_treble_hz: 2500
   busy_threshold_dbfs: -45  # RX level considered "signal present" if no busy_pin
 
+display:               # Pimoroni Display HAT Mini on top of the HAT (see README: take its RGB LED off,
+  enabled: false       # and add dtparam=spi=on to /boot/firmware/config.txt)
+  sleep_s: 0           # backlight off after this many seconds of nothing happening (0 = always on)
+  rotate: 180          # 0 if the picture is upside down
+  buttons:             # channel_up, channel_down, page, backlight or none
+    a: channel_up
+    b: channel_down
+    x: page
+    y: backlight
+
 selcall:
   # Sequential tone calls (1-20 digits). Type the number in the Selcall panel (or pick a preset),
   # then press the Call soft key on the radio to send it. Received calls show on the head.

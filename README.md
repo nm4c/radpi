@@ -397,6 +397,45 @@ treble by 3 dB above 2.5 kHz. Change them under `audio:` with `tx_bass_db`, `tx_
 sound). The radio passes only about 300-3000 Hz, so no setting adds bass below that. More bass
 also raises the level, so recheck deviation after a big change. Selcall tones are not filtered.
 
+## Display on the Pi
+
+A [Pimoroni Display HAT Mini](https://shop.pimoroni.com/products/display-hat-mini) (2.0", 320×240)
+on top of either RadPi HAT shows the channel, frequency and CTCSS, whether the channel is clear,
+busy or on air (and who's transmitting), the signal, the last over the AI agent heard (who and
+what they said), and who's logged in. Button X switches to a page with the Pi's address, host
+name, temperature, uptime and the AI agent's state. A and B step the channel; Y turns the
+backlight off (any button turns it back on).
+
+Before fitting it:
+
+- **Take the RGB LED off the display board** (or its three resistors). It's wired to GPIO 17, 27
+  and 22, which are PTT, the SA818's power-down and its power level. RadPi never drives them for
+  the display, but at boot, before the server sets them, the LED can pull the PTT line partway up.
+- Fit your HAT with a **stacking header** (2×20, long pins), then the display on top.
+- **Turn on SPI:** add `dtparam=spi=on` to `/boot/firmware/config.txt` and reboot.
+- On the SA818 HAT, keep the antenna off the SMA: the display's edge is a few mm from it. Run coax
+  to an antenna away from the case.
+
+Then in `config.yaml`:
+
+```yaml
+display:
+  enabled: true
+  sleep_s: 300      # backlight off after 5 minutes of nothing (0 = always on)
+  rotate: 180       # 0 if the picture is upside down in your case
+```
+
+Buttons can be changed under `display.buttons` (`channel_up`, `channel_down`, `page`,
+`backlight` or `none` for each of `a`, `b`, `x`, `y`). The display's other pins (SPI CE1, GPIO 9
+for data/command, 13 for the backlight, 5, 6, 16 and 24 for the buttons) are all free on both
+RadPi HATs; the server refuses to start if a pin in `config.yaml` clashes with them.
+
+For a quiet receiver the backlight is plain on/off (no dimming: PWM switching right over the
+codec would be a whine on the audio), and the SPI clock is 20 MHz, whose harmonics (460, 480 MHz)
+miss UHF CB. The screen is only redrawn when something on it changes. Listen on an empty channel
+with the display on and off once: there should be no difference. To check the layout without the
+hardware, set `gpio.backend: mock` and `display.mock_file: display.png`.
+
 ## Install on the Pi
 
 1. Build the interface: see **[docs/HARDWARE.md](docs/HARDWARE.md)**. It has generic wiring plus IC-F621 notes.
@@ -575,7 +614,7 @@ server/   main.py (web + WebSocket + safety watchdog), radio.py (PTT, channels, 
           recorder.py (recording received audio into the clip list), auth.py (accounts, sessions,
           audit log), users.py (the radpi-users tool),
           eq.py (TX tone control), voicefx.py (voice effects), tts.py (text to speech: Say and
-          the AI agent's voice), bot/ (the AI agent: capture, stt, speakers, brain, agent;
+          the AI agent's voice), display.py (Display HAT Mini on the Pi), bot/ (the AI agent: capture, stt, speakers, brain, agent;
           python -m server.bot)
 web/      index.html, app.js, worklet.js (AudioWorklet capture/playback), style.css,
           control-head/ (control head SVGs and their input handling, control_head.js)

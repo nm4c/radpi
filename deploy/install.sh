@@ -26,7 +26,7 @@ apt-get update
 apt-get install -y python3-venv python3-lgpio libportaudio2 alsa-utils
 
 id radio &>/dev/null || useradd --system --home "$DEST" --shell /usr/sbin/nologin radio
-usermod -aG gpio,audio,dialout radio   # dialout: serial port for the RadPi SA818 HAT
+usermod -aG gpio,audio,dialout,spi radio   # dialout: the SA818 HAT's serial port; spi: the Display HAT Mini
 
 mkdir -p "$DEST"
 cp -r "$SRC/server" "$SRC/web" "$SRC/requirements.txt" "$SRC/requirements-bot.txt" "$DEST/"
