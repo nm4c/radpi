@@ -1,7 +1,7 @@
 # Icom IP remote mic protocol (IC-F6330D)
 
-Reverse engineered from captures between an IC-F6330D and its PoE IP mic head (radio
-192.0.2.10, mic 192.0.2.20, over an IPsec tunnel with no NAT). `server/icom_ipmic.py` implements
+Reverse engineered from captures between an IC-F6330D and its PoE IP mic head.
+`server/icom_ipmic.py` implements
 it; `server/icom.py` is RadPi's `radio.type: icom` built on it (README, "Icom IP mic radio"), and
 `python -m server.icom_cli` is a stand-alone mic you can drive from a terminal.
 

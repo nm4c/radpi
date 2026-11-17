@@ -308,7 +308,7 @@ bot:
 #     names: {1: "CB Rpt 1", 2: "CB Rpt 2", 3: "CB Rpt 3"}
 # icom:
 #   listen: 0.0.0.0       # where the radio connects: TCP 52001, RTP on UDP 50000
-#   radio_ip: 192.0.2.10  # only accept the radio from this address
+#   radio_ip: 192.0.2.10  # only accept the radio from this address (your radio's)
 #   rx_gain: 4.0          # the radio sends audio at about -43 dBFS: this brings it up 12 dB
 #   tx_gain: 0.25         # the radio expects mic level; higher over-deviates. Set by ear on air.
 #   direct_entry: true    # change channel by typing its number ("006"); false = UP/DOWN presses

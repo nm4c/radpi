@@ -1,6 +1,6 @@
 """Stand-alone test client for the Icom IP mic protocol: run it on the Pi in place of the mic.
 
-    python -m server.icom_cli [--radio 192.0.2.10] [--record rx.wav] [--gain 0.25] [-v]
+    python -m server.icom_cli [--radio <radio address>] [--record rx.wav] [--gain 0.25] [-v]
 
 The radio connects to whatever address it is programmed with for the mic, so give the Pi that
 address (or point the radio at the Pi) and unplug the real mic first. Then type:
