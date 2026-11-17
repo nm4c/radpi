@@ -449,10 +449,12 @@ to the radio.
 
 1. Give the Pi the mic's IP address (and unplug the mic), or program the radio with the Pi's.
    The radio connects to that address on TCP 52001; audio is RTP on UDP 50000 both ways.
-2. In `config.yaml`: `radio.type: icom`, an `icom:` section (`radio_ip`, gains), and
-   `channel.count` / `channel.names` with the names exactly as the radio's screen shows them.
-   Channel picks on the page press UP/DOWN and wait for each new name, and a channel changed on
-   the radio itself is followed too.
+2. In `config.yaml`: `radio.type: icom` and an `icom:` section (`radio_ip`, gains, presets).
+   The page's channel buttons are `icom.presets`: each gives the zone (LEFT/RIGHT change zone,
+   and each zone has its own channels), the channel's number in it and its name, exactly as the
+   radio's screen shows them. Picking one presses RIGHT/LEFT until the zone's name shows, types
+   the number on the keypad ("006") and waits for the channel's name. Changes made on the radio
+   itself are followed: the matching preset lights up, or none if it's on another channel.
 3. Set `icom.tx_gain` by ear on air: the radio expects mic level, and too much over-deviates.
 
 There is no login or encryption in this protocol: keep it on a private network or VPN.

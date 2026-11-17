@@ -43,6 +43,10 @@ DEFAULTS = {
         "rx_gain": 4.0,             # the radio sends audio at about -43 dBFS: bring it up
         "tx_gain": 0.25,            # and expects mic level (peaks about -18 dBFS); too high over-deviates
         "ident": None,              # hex ID sent to the radio (default: the captured mic's)
+        "direct_entry": True,       # change channel by typing its number on the keypad (else UP/DOWN)
+        "entry_digits": 3,          # digits the radio takes for a channel number ("006")
+        "presets": [],              # the channel buttons: [{zone, number, name}] (see config.example.yaml)
+        "zones": [],                # zone names in RIGHT order, as the screen shows them (optional)
         "radio_rtp_port": 50000,    # the radio's RTP port (always 50000 on a real radio; for testing)
     },
     "sa818": {
@@ -303,6 +307,24 @@ def load(path):
         for key in ("rx_gain", "tx_gain"):
             if not 0 < float(i[key]) <= 20:
                 raise SystemExit(f"config: icom.{key} must be more than 0 and at most 20")
+        if not 1 <= int(i["entry_digits"]) <= 4:
+            raise SystemExit("config: icom.entry_digits must be 1-4")
+        presets = i.get("presets") or []
+        if not isinstance(presets, list) or not all(isinstance(p, dict) for p in presets):
+            raise SystemExit("config: icom.presets must be a list of {zone, number, name}")
+        for p in presets:
+            try:
+                num = int(p["number"])
+            except (KeyError, TypeError, ValueError):
+                raise SystemExit(f"config: icom.presets: {p}: needs a number (the channel's number in its zone)") from None
+            if not str(p.get("name") or "").strip():
+                raise SystemExit(f"config: icom.presets: {p}: needs a name, exactly as the radio's screen shows it")
+            if not 1 <= num < 10 ** int(i["entry_digits"]):
+                raise SystemExit(f"config: icom.presets: {p}: number must be 1 to {10 ** int(i['entry_digits']) - 1}")
+        if presets and not i["direct_entry"]:
+            raise SystemExit("config: icom.presets need icom.direct_entry (channels are typed by number)")
+        if not presets and i["direct_entry"] and int(cfg["channel"]["count"]) >= 10 ** int(i["entry_digits"]):
+            raise SystemExit("config: channel.count has more digits than icom.entry_digits")
         if i.get("ident"):
             try:
                 bytes.fromhex(str(i["ident"]))

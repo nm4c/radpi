@@ -1,23 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 700" data-template="ipmic" role="group" aria-label="IC-F6330D mic">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-18 0 336 640" data-template="ipmic" role="group" aria-label="IC-F6330D mic">
 <defs>
   <linearGradient id="face" x1="0" y1="0" x2="1" y2="0">
     <stop offset="0" stop-color="#1b1d20"/><stop offset=".5" stop-color="#25282c"/><stop offset="1" stop-color="#1b1d20"/>
   </linearGradient>
 </defs>
-<rect x="8" y="148" width="20" height="46" rx="6" fill="#33373b" stroke="#111" stroke-width="2"/>
-<rect x="4" y="214" width="24" height="160" rx="10" fill="#2a2d31" stroke="#111" stroke-width="2"/>
-<rect x="272" y="150" width="20" height="44" rx="6" fill="#33373b" stroke="#111" stroke-width="2"/>
-<rect x="272" y="200" width="20" height="44" rx="6" fill="#33373b" stroke="#111" stroke-width="2"/>
+<rect x="-2" y="146" width="28" height="50" rx="7" fill="#3a3e43" stroke="#0d0e0f" stroke-width="2"/>
+<rect x="1" y="152" width="4" height="38" rx="2" fill="#565b61" />
+<rect x="-10" y="210" width="36" height="168" rx="14" fill="#30343a" stroke="#0d0e0f" stroke-width="2"/>
+<rect x="-6" y="220" width="5" height="148" rx="2.5" fill="#4c5157" />
+<rect x="274" y="148" width="28" height="46" rx="7" fill="#3a3e43" stroke="#0d0e0f" stroke-width="2"/>
+<rect x="295" y="154" width="4" height="34" rx="2" fill="#565b61" />
+<rect x="274" y="198" width="28" height="46" rx="7" fill="#3a3e43" stroke="#0d0e0f" stroke-width="2"/>
+<rect x="295" y="204" width="4" height="34" rx="2" fill="#565b61" />
 <rect x="116" y="4" width="68" height="22" rx="7" fill="#e6742b" stroke="#7a3510" stroke-width="2"/>
-<rect x="18" y="14" width="264" height="674" rx="64" fill="#202326" stroke="#0b0c0d" stroke-width="5"/>
-<rect x="32" y="28" width="236" height="646" rx="52" fill="url(#face)" />
-<text x="18" y="296" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="11" font-weight="700" fill="#9aa0a6" text-anchor="middle" transform="rotate(-90 18 296)">PTT</text>
-<rect x="0" y="210" width="34" height="168" rx="10" fill="transparent" class="mkey" data-ptt="1" aria-label="PTT"/>
-<rect x="0" y="144" width="34" height="54" rx="6" fill="transparent" class="mkey" data-key="side" aria-label="side (squelch)"/>
-<rect x="266" y="146" width="34" height="52" rx="6" fill="transparent" class="mkey" data-key="volup" aria-label="volume up"/>
-<rect x="266" y="198" width="34" height="50" rx="6" fill="transparent" class="mkey" data-key="voldn" aria-label="volume down"/>
-<text x="282" y="176" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#9aa0a6" text-anchor="middle">+</text>
-<text x="282" y="226" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#9aa0a6" text-anchor="middle">&#8722;</text>
+<rect x="18" y="14" width="264" height="606" rx="64" fill="#202326" stroke="#0b0c0d" stroke-width="5"/>
+<rect x="32" y="28" width="236" height="578" rx="52" fill="url(#face)" />
+<text x="7" y="294" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#b4bac0" text-anchor="middle" transform="rotate(-90 7 294)">PTT</text>
+<rect x="-14" y="206" width="50" height="176" rx="14" fill="transparent" class="mkey" data-ptt="1" aria-label="PTT"/>
+<rect x="-6" y="142" width="40" height="58" rx="7" fill="transparent" class="mkey" data-key="side" aria-label="side (squelch)"/>
+<rect x="266" y="144" width="40" height="52" rx="7" fill="transparent" class="mkey" data-key="volup" aria-label="volume up"/>
+<rect x="266" y="196" width="40" height="52" rx="7" fill="transparent" class="mkey" data-key="voldn" aria-label="volume down"/>
+<text x="289" y="176" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#b4bac0" text-anchor="middle">+</text>
+<text x="289" y="226" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#b4bac0" text-anchor="middle">&#8722;</text>
 <rect x="110" y="0" width="80" height="30" rx="7" fill="transparent" class="mkey" data-key="emerg" aria-label="emerg (menu)"/>
 <circle cx="74" cy="56" r="12" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
 <path d="M69.5 52.5 A6.5 6.5 0 1 0 78.5 52.5" fill="none" stroke="#c9c9c9" stroke-width="2" stroke-linecap="round"/><line x1="74" y1="48" x2="74" y2="56" stroke="#c9c9c9" stroke-width="2" stroke-linecap="round"/>
@@ -39,25 +43,25 @@
 <text id="mic-status" x="236" y="124" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="10" font-weight="700" fill="#b0141a" text-anchor="end"></text>
 <text id="mic-text" x="150" y="170" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-size="27" font-weight="700" fill="#16191a" text-anchor="middle" data-max-width="176" xml:space="preserve"></text>
 <text id="mic-sub" x="150" y="198" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="10" fill="#16191a" text-anchor="middle"></text>
-<rect x="46" y="238" width="60" height="36" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
-<text x="76.0" y="262.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#f2f2f2" text-anchor="middle">P1</text>
-<rect x="46" y="238" width="60" height="36" rx="9" fill="transparent" class="mkey" data-key="p1" aria-label="p1"/>
-<rect x="46" y="284" width="60" height="36" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
-<text x="76.0" y="308.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#f2f2f2" text-anchor="middle">P3</text>
-<rect x="46" y="284" width="60" height="36" rx="9" fill="transparent" class="mkey" data-key="p3" aria-label="p3"/>
-<rect x="194" y="238" width="60" height="36" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
-<text x="224.0" y="262.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#f2f2f2" text-anchor="middle">P2</text>
-<rect x="194" y="238" width="60" height="36" rx="9" fill="transparent" class="mkey" data-key="p2" aria-label="p2"/>
-<rect x="194" y="284" width="60" height="36" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
-<text x="224.0" y="308.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#f2f2f2" text-anchor="middle">P4</text>
-<rect x="194" y="284" width="60" height="36" rx="9" fill="transparent" class="mkey" data-key="p4" aria-label="p4"/>
-<rect x="114" y="236" width="72" height="86" rx="18" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
-<rect x="124" y="248" width="52" height="62" rx="12" fill="none" stroke="#f2f2f2" stroke-width="3"/>
-<rect x="142" y="256" width="16" height="4" rx="2" fill="#f2f2f2"/><rect x="142" y="298" width="16" height="4" rx="2" fill="#f2f2f2"/><rect x="132" y="271" width="4" height="16" rx="2" fill="#f2f2f2"/><rect x="164" y="271" width="4" height="16" rx="2" fill="#f2f2f2"/>
-<rect x="126" y="236" width="48" height="26" rx="8" fill="transparent" class="mkey" data-key="up" aria-label="up"/>
-<rect x="126" y="296" width="48" height="26" rx="8" fill="transparent" class="mkey" data-key="down" aria-label="down"/>
-<rect x="114" y="254" width="26" height="50" rx="8" fill="transparent" class="mkey" data-key="left" aria-label="left"/>
-<rect x="160" y="254" width="26" height="50" rx="8" fill="transparent" class="mkey" data-key="right" aria-label="right"/>
+<rect x="46" y="240" width="48" height="32" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
+<text x="70.0" y="262.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#f2f2f2" text-anchor="middle">P1</text>
+<rect x="46" y="240" width="48" height="32" rx="9" fill="transparent" class="mkey" data-key="p1" aria-label="p1"/>
+<rect x="46" y="284" width="48" height="32" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
+<text x="70.0" y="306.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#f2f2f2" text-anchor="middle">P3</text>
+<rect x="46" y="284" width="48" height="32" rx="9" fill="transparent" class="mkey" data-key="p3" aria-label="p3"/>
+<rect x="206" y="240" width="48" height="32" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
+<text x="230.0" y="262.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#f2f2f2" text-anchor="middle">P2</text>
+<rect x="206" y="240" width="48" height="32" rx="9" fill="transparent" class="mkey" data-key="p2" aria-label="p2"/>
+<rect x="206" y="284" width="48" height="32" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
+<text x="230.0" y="306.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#f2f2f2" text-anchor="middle">P4</text>
+<rect x="206" y="284" width="48" height="32" rx="9" fill="transparent" class="mkey" data-key="p4" aria-label="p4"/>
+<rect x="100" y="232" width="100" height="94" rx="22" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
+<rect x="113" y="244" width="74" height="70" rx="16" fill="none" stroke="#f2f2f2" stroke-width="3"/>
+<rect x="139" y="253" width="22" height="5" rx="2.5" fill="#f2f2f2"/><rect x="139" y="300" width="22" height="5" rx="2.5" fill="#f2f2f2"/><rect x="122" y="268" width="5" height="22" rx="2.5" fill="#f2f2f2"/><rect x="173" y="268" width="5" height="22" rx="2.5" fill="#f2f2f2"/>
+<rect x="113" y="232" width="74" height="34" rx="8" fill="transparent" class="mkey" data-key="up" aria-label="up"/>
+<rect x="113" y="292" width="74" height="34" rx="8" fill="transparent" class="mkey" data-key="down" aria-label="down"/>
+<rect x="100" y="250" width="34" height="58" rx="8" fill="transparent" class="mkey" data-key="left" aria-label="left"/>
+<rect x="166" y="250" width="34" height="58" rx="8" fill="transparent" class="mkey" data-key="right" aria-label="right"/>
 <rect x="46" y="334" width="64" height="36" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
 <text x="78.0" y="358.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#f2f2f2" text-anchor="middle">1</text>
 <rect x="46" y="334" width="64" height="36" rx="9" fill="transparent" class="mkey" data-key="1" aria-label="1"/>
@@ -102,11 +106,8 @@
 <rect x="190" y="466" width="64" height="36" rx="9" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>
 <text x="222.0" y="490.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#f2f2f2" text-anchor="middle">#</text>
 <rect x="190" y="466" width="64" height="36" rx="9" fill="transparent" class="mkey" data-key="#" aria-label="#"/>
-<rect x="62" y="528" width="176" height="7" rx="3.5" fill="#141618" />
-<rect x="62" y="544" width="176" height="7" rx="3.5" fill="#141618" />
-<rect x="62" y="560" width="176" height="7" rx="3.5" fill="#141618" />
-<rect x="62" y="576" width="176" height="7" rx="3.5" fill="#141618" />
-<rect x="62" y="592" width="176" height="7" rx="3.5" fill="#141618" />
-<rect x="72" y="608" width="156" height="7" rx="3.5" fill="#141618" />
-<rect x="82" y="624" width="136" height="7" rx="3.5" fill="#141618" />
+<rect x="62" y="526" width="176" height="7" rx="3.5" fill="#141618" />
+<rect x="62" y="540" width="176" height="7" rx="3.5" fill="#141618" />
+<rect x="62" y="554" width="176" height="7" rx="3.5" fill="#141618" />
+<rect x="74" y="568" width="152" height="7" rx="3.5" fill="#141618" />
 </svg>

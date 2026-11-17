@@ -1576,7 +1576,7 @@ function buildChannels() {
     const b = document.createElement("button");
     b.dataset.ch = ch.n;
     const label = document.createElement("b");
-    label.textContent = ch.freq ? `CH ${ch.n} · ${ch.freq}` : `CH ${ch.n}`;
+    label.textContent = ch.label || (ch.freq ? `CH ${ch.n} · ${ch.freq}` : `CH ${ch.n}`);
     b.append(label, ch.name);
     b.addEventListener("click", () => send({ type: "channel", action: "goto", channel: ch.n }));
     grid.appendChild(b);

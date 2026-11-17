@@ -24,7 +24,8 @@ HERE = Path(__file__).resolve().parent
 WEB = HERE.parent.parent / "web" / "control-head" / "ic-f6330d.svg"
 OUT = HERE / "output"
 
-W, H = 300, 700
+W, H = 300, 640
+PAD = 18           # room left and right of the housing for the side keys
 FONT = 'font-family="Liberation Sans, Arial, Helvetica, sans-serif"'
 MONO = 'font-family="DejaVu Sans Mono, Menlo, Consolas, monospace"'
 KEY_FILL = "#2c2f33"
@@ -53,24 +54,30 @@ def key(name, x, y, w, h, label, sub=None, r=9, size=17):
 
 def body():
     p = []
-    # side keys first, so the housing overlaps their inner edge
-    p.append(rrect(8, 148, 20, 46, 6, "#33373b", 'stroke="#111" stroke-width="2"'))           # SIDE
-    p.append(rrect(4, 214, 24, 160, 10, "#2a2d31", 'stroke="#111" stroke-width="2"'))         # PTT
-    p.append(rrect(272, 150, 20, 44, 6, "#33373b", 'stroke="#111" stroke-width="2"'))         # VOL+
-    p.append(rrect(272, 200, 20, 44, 6, "#33373b", 'stroke="#111" stroke-width="2"'))         # VOL-
+    # side keys first, so the housing overlaps their inner edge; a lighter strip on each gives it
+    # some depth
+    side = 'stroke="#0d0e0f" stroke-width="2"'
+    p.append(rrect(-2, 146, 28, 50, 7, "#3a3e43", side))                                    # SIDE
+    p.append(rrect(1, 152, 4, 38, 2, "#565b61"))
+    p.append(rrect(-10, 210, 36, 168, 14, "#30343a", side))                                 # PTT
+    p.append(rrect(-6, 220, 5, 148, 2.5, "#4c5157"))
+    p.append(rrect(274, 148, 28, 46, 7, "#3a3e43", side))                                   # VOL+
+    p.append(rrect(295, 154, 4, 34, 2, "#565b61"))
+    p.append(rrect(274, 198, 28, 46, 7, "#3a3e43", side))                                   # VOL-
+    p.append(rrect(295, 204, 4, 34, 2, "#565b61"))
     p.append(rrect(116, 4, 68, 22, 7, "#e6742b", 'stroke="#7a3510" stroke-width="2"'))        # EMERG
     # housing and face
-    p.append(rrect(18, 14, 264, 674, 64, "#202326", 'stroke="#0b0c0d" stroke-width="5"'))
-    p.append(rrect(32, 28, 236, 646, 52, "url(#face)"))
+    p.append(rrect(18, 14, 264, 606, 64, "#202326", 'stroke="#0b0c0d" stroke-width="5"'))
+    p.append(rrect(32, 28, 236, 578, 52, "url(#face)"))
     # side key labels and hit areas
-    p.append(f'<text x="18" y="296" {FONT} font-size="11" font-weight="700" fill="#9aa0a6" text-anchor="middle" '
-             f'transform="rotate(-90 18 296)">PTT</text>')
-    p.append(rrect(0, 210, 34, 168, 10, "transparent", 'class="mkey" data-ptt="1" aria-label="PTT"'))
-    p.append(rrect(0, 144, 34, 54, 6, "transparent", 'class="mkey" data-key="side" aria-label="side (squelch)"'))
-    p.append(rrect(266, 146, 34, 52, 6, "transparent", 'class="mkey" data-key="volup" aria-label="volume up"'))
-    p.append(rrect(266, 198, 34, 50, 6, "transparent", 'class="mkey" data-key="voldn" aria-label="volume down"'))
-    p.append(f'<text x="282" y="176" {FONT} font-size="14" font-weight="700" fill="#9aa0a6" text-anchor="middle">+</text>')
-    p.append(f'<text x="282" y="226" {FONT} font-size="16" font-weight="700" fill="#9aa0a6" text-anchor="middle">&#8722;</text>')
+    p.append(f'<text x="7" y="294" {FONT} font-size="12" font-weight="700" fill="#b4bac0" text-anchor="middle" '
+             f'transform="rotate(-90 7 294)">PTT</text>')
+    p.append(rrect(-14, 206, 50, 176, 14, "transparent", 'class="mkey" data-ptt="1" aria-label="PTT"'))
+    p.append(rrect(-6, 142, 40, 58, 7, "transparent", 'class="mkey" data-key="side" aria-label="side (squelch)"'))
+    p.append(rrect(266, 144, 40, 52, 7, "transparent", 'class="mkey" data-key="volup" aria-label="volume up"'))
+    p.append(rrect(266, 196, 40, 52, 7, "transparent", 'class="mkey" data-key="voldn" aria-label="volume down"'))
+    p.append(f'<text x="289" y="176" {FONT} font-size="15" font-weight="700" fill="#b4bac0" text-anchor="middle">+</text>')
+    p.append(f'<text x="289" y="226" {FONT} font-size="17" font-weight="700" fill="#b4bac0" text-anchor="middle">&#8722;</text>')
     p.append(rrect(110, 0, 80, 30, 7, "transparent", 'class="mkey" data-key="emerg" aria-label="emerg (menu)"'))
     # power key (top left) and LED (top right)
     p.append('<circle cx="74" cy="56" r="12" fill="#2c2f33" stroke="#44494f" stroke-width="1.5"/>')
@@ -109,19 +116,19 @@ def lcd():
 
 def keys():
     p = []
-    p.append(key("p1", 46, 238, 60, 36, "P1"))
-    p.append(key("p3", 46, 284, 60, 36, "P3"))
-    p.append(key("p2", 194, 238, 60, 36, "P2"))
-    p.append(key("p4", 194, 284, 60, 36, "P4"))
+    p.append(key("p1", 46, 240, 48, 32, "P1", size=15))
+    p.append(key("p3", 46, 284, 48, 32, "P3", size=15))
+    p.append(key("p2", 206, 240, 48, 32, "P2", size=15))
+    p.append(key("p4", 206, 284, 48, 32, "P4", size=15))
     # D-pad: a rounded square with a white ring and four bars, split into four hit areas
-    p.append(rrect(114, 236, 72, 86, 18, KEY_FILL, f'stroke="{KEY_EDGE}" stroke-width="1.5"'))
-    p.append(rrect(124, 248, 52, 62, 12, "none", f'stroke="{WHITE}" stroke-width="3"'))
-    p.append(f'<rect x="142" y="256" width="16" height="4" rx="2" fill="{WHITE}"/>'
-             f'<rect x="142" y="298" width="16" height="4" rx="2" fill="{WHITE}"/>'
-             f'<rect x="132" y="271" width="4" height="16" rx="2" fill="{WHITE}"/>'
-             f'<rect x="164" y="271" width="4" height="16" rx="2" fill="{WHITE}"/>')
-    for name, (x, y, w, h) in {"up": (126, 236, 48, 26), "down": (126, 296, 48, 26),
-                               "left": (114, 254, 26, 50), "right": (160, 254, 26, 50)}.items():
+    p.append(rrect(100, 232, 100, 94, 22, KEY_FILL, f'stroke="{KEY_EDGE}" stroke-width="1.5"'))
+    p.append(rrect(113, 244, 74, 70, 16, "none", f'stroke="{WHITE}" stroke-width="3"'))
+    p.append(f'<rect x="139" y="253" width="22" height="5" rx="2.5" fill="{WHITE}"/>'
+             f'<rect x="139" y="300" width="22" height="5" rx="2.5" fill="{WHITE}"/>'
+             f'<rect x="122" y="268" width="5" height="22" rx="2.5" fill="{WHITE}"/>'
+             f'<rect x="173" y="268" width="5" height="22" rx="2.5" fill="{WHITE}"/>')
+    for name, (x, y, w, h) in {"up": (113, 232, 74, 34), "down": (113, 292, 74, 34),
+                               "left": (100, 250, 34, 58), "right": (166, 250, 34, 58)}.items():
         p.append(rrect(x, y, w, h, 8, "transparent", f'class="mkey" data-key="{name}" aria-label="{name}"'))
     pad = [("1", ""), ("2", "ABC"), ("3", "DEF"), ("4", "GHI"), ("5", "JKL"), ("6", "MNO"),
            ("7", "PQRS"), ("8", "TUV"), ("9", "WXYZ"), ("*", ""), ("0", ""), ("#", "")]
@@ -133,15 +140,15 @@ def keys():
 
 def grille():
     p = []
-    for i in range(7):
-        y = 528 + i * 16
-        inset = 30 + max(0, i - 4) * 10
+    for i in range(4):
+        y = 526 + i * 14
+        inset = 30 + max(0, i - 2) * 12
         p.append(rrect(32 + inset, y, 236 - 2 * inset, 7, 3.5, "#141618"))
     return "\n".join(p)
 
 
 def svg():
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" data-template="ipmic" role="group" aria-label="IC-F6330D mic">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-PAD} 0 {W + 2 * PAD} {H}" data-template="ipmic" role="group" aria-label="IC-F6330D mic">
 <defs>
   <linearGradient id="face" x1="0" y1="0" x2="1" y2="0">
     <stop offset="0" stop-color="#1b1d20"/><stop offset=".5" stop-color="#25282c"/><stop offset="1" stop-color="#1b1d20"/>

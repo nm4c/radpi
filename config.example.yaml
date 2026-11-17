@@ -311,3 +311,14 @@ bot:
 #   radio_ip: 192.0.2.10  # only accept the radio from this address
 #   rx_gain: 4.0          # the radio sends audio at about -43 dBFS: this brings it up 12 dB
 #   tx_gain: 0.25         # the radio expects mic level; higher over-deviates. Set by ear on air.
+#   direct_entry: true    # change channel by typing its number ("006"); false = UP/DOWN presses
+#   entry_digits: 3
+#   # The channel buttons on the page. LEFT/RIGHT change zone and each zone has its own channel
+#   # list, so each preset names its zone (as the screen shows it when you change zone), the
+#   # channel's number in that zone, and the channel's name on the screen. Picking one changes
+#   # zone if needed, then types the number. With presets, channel.count/names aren't used.
+#   presets:
+#     - {zone: "UHF CB", number: 6, name: "CB Rpt 6"}
+#     - {zone: "UHF CB", number: 40, name: "CB Ch 40"}
+#     - {zone: "LINKS", number: 36, name: "36 Link"}
+#   zones: ["UHF CB", "LINKS", "IDAS"]   # optional: every zone in RIGHT order, so it goes the short way
