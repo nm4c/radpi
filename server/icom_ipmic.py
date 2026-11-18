@@ -554,7 +554,7 @@ class MicLink:
             try:
                 reader, writer = await asyncio.wait_for(self._connect(), 5)
             except (OSError, asyncio.TimeoutError) as e:
-                log.info("mic %s: %s", self.mic_ip, e or "no answer")
+                log.info("mic %s: %s", self.mic_ip, str(e) or "no answer (timed out)")
                 await asyncio.sleep(self.RETRY_S)
                 continue
             log.info("connected to mic %s", self.mic_ip)
