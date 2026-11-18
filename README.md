@@ -494,6 +494,12 @@ the router translate the Pi's traffic to the mic so it comes from that address (
 NAT, ports kept as they are, both ways). RadPi connects from TCP port 52001, as the radio does;
 the mic ignores connections from any other port.
 
+Several mics can be connected at once (`mic_head.mics`): they all show the same screen and hear
+the same audio, and PTT goes to whichever mic presses first, as with operators on the page; the
+others show "NO TX". Each is named on the page and in the audit log ("Mic 1", "Mic 2", or a name
+you give it). A mic programmed by a different radio expects that radio's address, so give each
+one its own `local` address or NAT rule.
+
 ## Install on the Pi
 
 1. Build the interface: see **[docs/HARDWARE.md](docs/HARDWARE.md)**. It has generic wiring plus IC-F621 notes.

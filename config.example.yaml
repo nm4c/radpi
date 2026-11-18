@@ -344,3 +344,9 @@ bot:
 #     right: channel_up
 #     p1: "selcall:12345"
 #     p2: "clip:Net call"
+#   # Several mics: list them under mics: instead of mic_ip. Each takes the settings above as its
+#   # defaults and can set its own (keys are merged). They all show the same screen; PTT goes to
+#   # whichever presses first, and the page and audit log name it ("Mic 1", "Mic 2" or `name`).
+#   mics:
+#     - {mic_ip: 192.0.2.20, name: "Ute"}
+#     - {mic_ip: 192.0.2.21, name: "Shed", local: 192.0.2.11, keys: {p1: "clip:Gate open"}}

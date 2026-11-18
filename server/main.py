@@ -164,9 +164,9 @@ class RemoteHead:
         # A real Icom IP mic as a control head (mic_head.mic_ip): with radio.type icom it sits
         # between the radio and RadPi, otherwise it drives RadPi's radio itself.
         self.mic_head = None
-        if cfg["mic_head"]["mic_ip"]:
-            from .michead import MicHead
-            self.mic_head = MicHead(cfg, self)
+        if cfg["mic_head"]["mic_ip"] or cfg["mic_head"]["mics"]:
+            from .michead import MicHeads
+            self.mic_head = MicHeads(cfg, self)
         # The screen on the Pi (display.enabled): Pimoroni Display HAT Mini.
         self.display = None
         if cfg["display"]["enabled"]:
@@ -205,8 +205,8 @@ class RemoteHead:
     def _client(self, cid):
         if self.bot and cid == self.bot.operator.id:
             return self.bot.operator
-        if self.mic_head and cid == self.mic_head.op.id:
-            return self.mic_head.op
+        if self.mic_head and cid is not None and cid < 0:
+            return self.mic_head.op(cid)
         return next((c for c in self.clients if c.id == cid), None)
 
     def _spawn(self, coro):
@@ -242,7 +242,7 @@ class RemoteHead:
                 "remaining_s": remaining,
             },
             "operators": sorted([x.name for x in self._authed()]
-                                + (["Mic"] if self.mic_head and self.mic_head.connected else [])),
+                                + (self.mic_head.connected_names() if self.mic_head else [])),
             "selcall_tx": self.selcall_tx,
             "clip_tx": {"id": self.clip_tx["id"], "name": self.clip_tx["name"]} if self.clip_tx else None,
             "bot_tx": self.bot_tx["text"] if self.bot_tx else None,

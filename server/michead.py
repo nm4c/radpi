@@ -31,7 +31,8 @@ from .icom_ipmic import AUDIO_TX, DEFAULT_ICONS, FRAME, KEYS, RATE, MicLink, fra
 
 log = logging.getLogger("michead")
 
-MIC_CLIENT_ID = -1        # owner id for PTT from the mic (operators start at 1, the AI agent is 0)
+MIC_CLIENT_ID = -1        # owner id for PTT from the first mic, -2 the second... (operators start
+                          # at 1, the AI agent is 0)
 KEY_NAMES = {v: k for k, v in KEYS.items()}
 ACTIONS = ("none", "channel_up", "channel_down", "volume_up", "volume_down")   # plus selcall:/clip:
 FLASH_S = 1.5             # a message (volume, "NO TX") stays on the screen this long
@@ -51,9 +52,9 @@ def check_action(a):
 class MicOperator:
     """Stands in for an operator when the mic transmits (like the AI agent's BotOperator)."""
 
-    def __init__(self, head, mic_ip):
-        self.id = MIC_CLIENT_ID
-        self.name = "Mic"
+    def __init__(self, head, mic_ip, cid, name):
+        self.id = cid
+        self.name = name
         self.username = "mic"
         self.remote = mic_ip
         self.last_hold = 0.0
@@ -68,19 +69,73 @@ class MicOperator:
         """RadPi's notices to this operator: shown on the mic's screen for a moment."""
         if obj.get("type") != "notice":
             return
-        log.info("mic: %s", obj.get("text"))
+        log.info("%s: %s", self.name, obj.get("text"))
         code = obj.get("code")
         self._head.flash("NO TX" if code == "ptt_denied" else "TX STOP" if code == "ptt_dropped" else "ERROR")
 
 
-class MicHead:
+def mic_configs(m):
+    """mic_head -> one settings dict a mic: mic_head.mics entries over the mic_head settings (keys
+    merged), or mic_head itself for a single mic_ip."""
+    base = {k: v for k, v in m.items() if k != "mics"}
+    entries = list(m.get("mics") or [])
+    if m.get("mic_ip"):
+        entries.insert(0, {})
+    out = []
+    for e in entries:
+        c = {**base, **e}
+        c["keys"] = {**(base.get("keys") or {}), **(e.get("keys") or {})}
+        out.append(c)
+    many = len(out) > 1
+    for i, c in enumerate(out, 1):
+        c["name"] = str(c.get("name") or (f"Mic {i}" if many else "Mic"))
+    return out
+
+
+class MicHeads:
+    """All the configured mics. In proxy mode the radio's frames go to every one; PTT is first
+    come, first served, like the web page's."""
+
     def __init__(self, cfg, server):
-        m = cfg["mic_head"]
-        self.cfg = m
         self.server = server
         self.radio = server.radio
         self.proxy = cfg["radio"]["type"] == "icom"
-        self.op = MicOperator(self, m["mic_ip"])
+        self.last_key = None      # the mic a key was last pressed on (whose audio a send call takes)
+        self.heads = [MicHead(cfg, server, m, MIC_CLIENT_ID - i, self)
+                      for i, m in enumerate(mic_configs(cfg["mic_head"]))]
+        if self.proxy:
+            self.radio.mic.on_frame = self._from_radio
+
+    def _from_radio(self, *frame_):
+        for h in self.heads:
+            h._from_radio(*frame_)
+
+    def op(self, cid):
+        return next((h.op for h in self.heads if h.op.id == cid), None)
+
+    def connected_names(self):
+        return [h.op.name for h in self.heads if h.connected]
+
+    def feed_rx(self, pcm):
+        for h in self.heads:
+            h.feed_rx(pcm)
+
+    async def run(self):
+        await asyncio.gather(*(h.run() for h in self.heads))
+
+    def close(self):
+        for h in self.heads:
+            h.close()
+
+
+class MicHead:
+    def __init__(self, cfg, server, m, cid, group):
+        self.cfg = m
+        self.server = server
+        self.group = group
+        self.radio = server.radio
+        self.proxy = cfg["radio"]["type"] == "icom"
+        self.op = MicOperator(self, m["mic_ip"], cid, m["name"])
         wire = int(cfg["audio"]["wire_rate"])
         self.m = wire // RATE
         if m["mic_gain"] is not None:
@@ -112,13 +167,11 @@ class MicHead:
         self._cache = {}
         self._screen = None
         self._radio_link = None
-        if self.proxy:
-            self.radio.mic.on_frame = self._from_radio
 
     # ---- lifecycle
     async def run(self):
         await self.link.start()
-        log.info("mic head: %s %s (connecting from %s)", "proxy for the radio's mic" if self.proxy
+        log.info("%s: %s %s (connecting from %s)", self.op.name, "proxy for the radio's mic" if self.proxy
                  else "control head at", self.cfg["mic_ip"], self.cfg["local"])
         try:
             while True:
@@ -135,7 +188,7 @@ class MicHead:
         return self.link.connected.is_set()
 
     def _on_state(self, state):
-        log.info("mic %s", state)
+        log.info("%s %s", self.op.name, state)
         self._shown = None
         if state == "connected" and self.proxy:
             self._radio_link = self.radio.link
@@ -160,9 +213,10 @@ class MicHead:
 
     def _mask_tx(self, data):
         """The radio asks for mic audio when anyone transmits: only pass that on to the mic when
-        it is the mic's transmission (or the radio's own, P4's send call)."""
+        it is this mic's transmission, or the radio's own (P4's send call) started from this mic."""
         owner = self.radio.ptt_owner
-        if data and data[0] & AUDIO_TX and owner not in (None, self.op.id):
+        mine = owner == self.op.id or (owner is None and self.group.last_key is self)
+        if data and data[0] & AUDIO_TX and not mine:
             return bytes((data[0] & ~AUDIO_TX,)) + bytes(data[1:])
         return data
 
@@ -184,6 +238,8 @@ class MicHead:
                 return
             if not self.radio.link:
                 return
+            if down:
+                self.group.last_key = self
             (self.radio.mic.key_down if down else self.radio.mic.key_up)(code)
             return
         if not down or name is None:
@@ -246,7 +302,7 @@ class MicHead:
             try:
                 await coro
             except RadioError as e:
-                log.info("mic: %s", e)
+                log.info("%s: %s", self.op.name, e)
                 self.flash("ERROR")
         self.server._spawn(run())
 
@@ -262,7 +318,7 @@ class MicHead:
             self.op.last_hold = time.monotonic()
             self.server._ptt_on(self.op)
             if self.radio.ptt_owner == self.op.id:
-                log.info("PTT from the mic")
+                log.info("PTT from %s", self.op.name)
                 self.up.reset()
             self.server.broadcast_state()
         else:
@@ -272,7 +328,8 @@ class MicHead:
     def _on_audio(self, pcm):
         owner = self.radio.ptt_owner
         mine = owner == self.op.id
-        sendcall = self.proxy and owner is None and self.radio.mic.flags & AUDIO_TX
+        sendcall = (self.proxy and owner is None and self.radio.mic.flags & AUDIO_TX
+                    and self.group.last_key is self)
         if not (mine or sendcall):
             return
         if mine:
@@ -333,9 +390,10 @@ class MicHead:
                     self.link.audio_flags()
                     self.link.display("NO RADIO")
             if self._flash and now < self._flash[1]:
-                self.link.display(self._flash[0])
-                self._shown = ("flash",)
-            elif self._shown == ("flash",):
+                if self._shown != ("flash", self._flash[0]):
+                    self.link.display(self._flash[0])
+                    self._shown = ("flash", self._flash[0])
+            elif self._shown and self._shown[0] == "flash":
                 self._shown = None
                 self._replay()
             return

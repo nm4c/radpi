@@ -51,6 +51,7 @@ DEFAULTS = {
     },
     "mic_head": {                   # a real Icom IP mic as a control head (server/michead.py)
         "mic_ip": None,             # the mic's address: set to switch it on
+        "mics": [],                 # or several: [{mic_ip, name, local, keys, volume...}] over these settings
         "local": "0.0.0.0",         # address to connect from: the mic only answers its programmed radio's
         "mic_gain": None,           # mic audio into RadPi (default: 4, or 1/icom.tx_gain with radio.type icom)
         "rx_gain": None,            # speaker audio to the mic (default: 1, or 1/icom.rx_gain with icom)
@@ -254,13 +255,28 @@ DEFAULTS = {
 
 
 def _check_mic_head(cfg):
-    m = cfg["mic_head"]
-    if not m["mic_ip"]:
+    top = cfg["mic_head"]
+    mics = top.get("mics") or []
+    if not top["mic_ip"] and not mics:
         return
-    from .icom_ipmic import KEYS
-    from .michead import check_action
+    if not isinstance(mics, list) or not all(isinstance(e, dict) and e.get("mic_ip") for e in mics):
+        raise SystemExit("config: mic_head.mics must be a list of {mic_ip, name, ...}")
+    from .michead import mic_configs
     if int(cfg["audio"]["wire_rate"]) % 8000:
         raise SystemExit("config: audio.wire_rate must be a multiple of 8000 for mic_head")
+    all_ = mic_configs(top)
+    for what, key in (("mic_ip", lambda c: f"{c['mic_ip']}:{c['mic_port']}"), ("name", lambda c: c["name"])):
+        seen = [str(key(c)).casefold() for c in all_]
+        dup = {x for x in seen if seen.count(x) > 1}
+        if dup:
+            raise SystemExit(f"config: mic_head: two mics with the same {what} ({', '.join(sorted(dup))})")
+    for m in all_:
+        _check_one_mic(m)
+
+
+def _check_one_mic(m):
+    from .icom_ipmic import KEYS
+    from .michead import check_action
     for key in ("mic_gain", "rx_gain"):
         if m[key] is not None and not 0 < float(m[key]) <= 20:
             raise SystemExit(f"config: mic_head.{key} must be more than 0 and at most 20")
