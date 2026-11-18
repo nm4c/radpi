@@ -322,3 +322,25 @@ bot:
 #     - {zone: "UHF CB", number: 40, name: "CB Ch 40"}
 #     - {zone: "ZONE 2", number: 3, name: "SITE 3"}
 #   zones: ["UHF CB", "ZONE 2", "ZONE 3"]   # optional: every zone in RIGHT order, so it goes the short way
+
+# ---- Icom IP mic as a control head (any radio.type) ----------------------------------------
+# A real IC-F6330D PoE mic driving RadPi: RadPi connects to the mic as its radio would. The mic
+# only answers the radio address it was programmed with, so the Pi has to reach it from that
+# address: set `local` to it (the Pi borrowing the address), or NAT the Pi to it on the router.
+# With radio.type icom, RadPi sits between the two (program the radio's mic address as the Pi's):
+# the mic shows the radio's screen and its keys go to the radio, and its PTT is RadPi's PTT for
+# an operator called "Mic". With other radios the mic shows RadPi's channel, and its keys do what
+# `keys` says; the keypad types a channel number (# to enter a short one, * to clear).
+# mic_head:
+#   mic_ip: 192.0.2.20    # the mic
+#   local: 0.0.0.0        # address to connect from (the mic's programmed radio address, if the Pi has it)
+#   volume: 6             # starting speaker volume 0-10 (VOL +/-; not with radio.type icom)
+#   mic_gain: 4.0         # mic audio into RadPi (default 1/icom.tx_gain with radio.type icom)
+#   rx_gain: 1.0          # speaker audio to the mic (default 1/icom.rx_gain with radio.type icom)
+#   keys:                 # channel_up, channel_down, volume_up, volume_down, selcall:<digits>,
+#     up: channel_up      # clip:<name> or none, for: up down left right p1-p4 side emerg volup voldn
+#     down: channel_down
+#     left: channel_down
+#     right: channel_up
+#     p1: "selcall:12345"
+#     p2: "clip:Net call"

@@ -49,6 +49,19 @@ DEFAULTS = {
         "zones": [],                # zone names in RIGHT order, as the screen shows them (optional)
         "radio_rtp_port": 50000,    # the radio's RTP port (always 50000 on a real radio; for testing)
     },
+    "mic_head": {                   # a real Icom IP mic as a control head (server/michead.py)
+        "mic_ip": None,             # the mic's address: set to switch it on
+        "local": "0.0.0.0",         # address to connect from: the mic only answers its programmed radio's
+        "mic_gain": None,           # mic audio into RadPi (default: 4, or 1/icom.tx_gain with radio.type icom)
+        "rx_gain": None,            # speaker audio to the mic (default: 1, or 1/icom.rx_gain with icom)
+        "volume": 6,                # starting speaker volume 0-10 (VOL +/-; not with radio.type icom)
+        "keys": {                   # what the mic's keys do (not with radio.type icom: those go to the radio)
+            "up": "channel_up", "down": "channel_down", "volup": "volume_up", "voldn": "volume_down",
+        },
+        "src_port": 52001,          # for testing only: the real radio and mic always use these
+        "mic_port": 52001,
+        "mic_rtp_port": 50000,
+    },
     "sa818": {
         "port": "/dev/serial0",
         "baud": 9600,
@@ -240,6 +253,30 @@ DEFAULTS = {
 }
 
 
+def _check_mic_head(cfg):
+    m = cfg["mic_head"]
+    if not m["mic_ip"]:
+        return
+    from .icom_ipmic import KEYS
+    from .michead import check_action
+    if int(cfg["audio"]["wire_rate"]) % 8000:
+        raise SystemExit("config: audio.wire_rate must be a multiple of 8000 for mic_head")
+    for key in ("mic_gain", "rx_gain"):
+        if m[key] is not None and not 0 < float(m[key]) <= 20:
+            raise SystemExit(f"config: mic_head.{key} must be more than 0 and at most 20")
+    if not 0 <= int(m["volume"]) <= 10:
+        raise SystemExit("config: mic_head.volume must be 0-10")
+    for k, a in (m["keys"] or {}).items():
+        if str(k) not in KEYS:
+            raise SystemExit(f"config: mic_head.keys: no key {k!r} (keys: {', '.join(KEYS)})")
+        try:
+            check_action(a)
+        except ValueError as e:
+            raise SystemExit(f"config: mic_head.keys.{k}: {e}") from None
+        if str(k).isdigit() or k in ("*", "#"):
+            raise SystemExit(f"config: mic_head.keys.{k}: the keypad types channel numbers")
+
+
 def _check_display(cfg):
     d = cfg["display"]
     if not d["enabled"]:
@@ -330,6 +367,7 @@ def load(path):
                 bytes.fromhex(str(i["ident"]))
             except ValueError:
                 raise SystemExit("config: icom.ident must be hex") from None
+    _check_mic_head(cfg)
     if kind in ("buttons", "icom") and int(cfg["channel"]["count"]) < 1:
         raise SystemExit("config: channel.count must be >= 1")
     if kind == "sa818":

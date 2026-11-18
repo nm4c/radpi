@@ -170,6 +170,89 @@ def display_flags(data):
     }
 
 
+class RtpPort:
+    """One UDP socket on the RTP port, shared by everything here that uses it: the mic emulator
+    (audio from the radio) and MicLink (audio from a real mic) both need port 50000 when RadPi sits
+    between the two. Each packet goes to the handler registered for its sender (ip, port), else
+    for its sender's ip, else to the default handler."""
+
+    _open = {}
+
+    def __init__(self, key):
+        self.key = key
+        self.handlers = {}
+        self.transport = None
+        self.users = 0
+        self.ready = asyncio.Event()
+
+    @classmethod
+    async def get(cls, local, port):
+        key = (local, port)
+        hub = cls._open.get(key)
+        if hub is None:
+            hub = cls._open[key] = cls(key)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(key)
+                hub.transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
+                    lambda: _HubProto(hub), sock=sock)
+            except BaseException:
+                sock.close()
+                del cls._open[key]
+                hub.ready.set()
+                raise
+            hub.ready.set()
+        else:
+            await hub.ready.wait()
+            if hub.transport is None:
+                raise OSError(f"udp {local}:{port} could not be opened")
+        hub.users += 1
+        return hub
+
+    def add(self, cb, src=None):
+        self.handlers[src] = cb
+
+    def remove(self, src=None):
+        self.handlers.pop(src, None)
+
+    def sendto(self, data, addr):
+        if self.transport:
+            self.transport.sendto(data, addr)
+
+    def release(self):
+        self.users -= 1
+        if self.users <= 0 and self.transport:
+            self.transport.close()
+            self.transport = None
+            if self._open.get(self.key) is self:
+                del self._open[self.key]
+
+    def dispatch(self, data, addr):
+        cb = self.handlers.get(addr[:2]) or self.handlers.get(addr[0]) or self.handlers.get(None)
+        if cb:
+            cb(data, addr)
+
+
+class _HubProto(asyncio.DatagramProtocol):
+    def __init__(self, hub):
+        self.hub = hub
+
+    def datagram_received(self, data, addr):
+        self.hub.dispatch(data, addr)
+
+
+def rtp_payload(data):
+    """An RTP packet's audio as int16 little-endian, or None if it isn't one."""
+    if len(data) < 12 or data[0] >> 6 != 2:
+        return None
+    payload = data[12 + 4 * (data[0] & 0x0F):]
+    n = len(payload) // 2
+    if not n:
+        return None
+    return struct.pack(f"<{n}h", *struct.unpack(f">{n}h", payload[:n * 2]))
+
+
 class Mic:
     """Pretends to be the IP mic head. The radio connects to us.
 
@@ -179,12 +262,15 @@ class Mic:
       on_audio(pcm)             20 ms of speaker audio, int16 little-endian bytes at 8 kHz
       on_state(name)            'connected', 'disconnected', 'power_off', 'power_on'
       on_tx(bool)               radio started / stopped wanting mic audio
+      on_frame(start, group, cmd, data)   every frame from the radio, after the above
     """
 
     def __init__(self, listen="0.0.0.0", radio_ip=None, ident=IDENT, on_display=None,
-                 on_led=None, on_audio=None, on_state=None, on_tx=None, radio_rtp_port=RTP_PORT):
+                 on_led=None, on_audio=None, on_state=None, on_tx=None, radio_rtp_port=RTP_PORT,
+                 ctrl_port=CTRL_PORT, rtp_port=RTP_PORT, on_frame=None):
         self.listen, self.radio_ip, self.ident = listen, radio_ip, ident
-        self.radio_rtp_port = radio_rtp_port
+        self.radio_rtp_port, self.ctrl_port, self.rtp_port = radio_rtp_port, ctrl_port, rtp_port
+        self.on_frame = on_frame
         self.on_display, self.on_led, self.on_audio = on_display, on_led, on_audio
         self.on_state, self.on_tx = on_state, on_tx
         self.writer = None
@@ -204,11 +290,12 @@ class Mic:
 
     # ---- lifecycle
     async def start(self):
-        loop = asyncio.get_running_loop()
-        self._server = await asyncio.start_server(self._client, self.listen, CTRL_PORT)
-        self._udp, _ = await loop.create_datagram_endpoint(
-            lambda: _Rtp(self), local_addr=(self.listen, RTP_PORT))
-        log.info("listening on %s tcp %d / udp %d", self.listen, CTRL_PORT, RTP_PORT)
+        # reuse_port: a MicLink may connect out from this same port (RadPi between radio and mic)
+        self._server = await asyncio.start_server(self._client, self.listen, self.ctrl_port,
+                                                  reuse_port=hasattr(socket, "SO_REUSEPORT"))
+        self._udp = await RtpPort.get(self.listen, self.rtp_port)
+        self._udp.add(self._on_rtp)
+        log.info("listening on %s tcp %d / udp %d", self.listen, self.ctrl_port, self.rtp_port)
 
     def drop(self):
         """Close the control link; the radio will connect again."""
@@ -220,7 +307,9 @@ class Mic:
         if getattr(self, "_server", None):
             self._server.close()
         if self._udp:
-            self._udp.close()
+            self._udp.remove()
+            self._udp.release()
+            self._udp = None
 
     async def close(self):
         self.close_now()
@@ -304,6 +393,7 @@ class Mic:
             self._set_flags(data[0] if data else 0)
         else:
             log.debug("radio %02x %02x %s", group, cmd, data.hex(" "))
+        self._emit(self.on_frame, start, group, cmd, bytes(data))
 
     def _set_flags(self, f):
         was = bool(self.flags & AUDIO_TX)
@@ -361,6 +451,13 @@ class Mic:
         self._seq = (self._seq + 1) & 0xFFFF
         self._ts = (self._ts + FRAME) & 0xFFFFFFFF
 
+    def _on_rtp(self, data, addr):
+        if self.peer and addr[0] != self.peer:
+            return
+        pcm = rtp_payload(data)
+        if pcm and self.on_audio:
+            self._emit(self.on_audio, pcm)
+
     async def transmit(self, pcm_le, gain=1.0, wait=1.0):
         """Key up, send 8 kHz int16 little-endian PCM paced at 20 ms, unkey. Returns False if the
         radio never asked for audio (PTT refused, radio off)."""
@@ -385,21 +482,6 @@ class Mic:
             self.ptt(False)
 
 
-class _Rtp(asyncio.DatagramProtocol):
-    def __init__(self, mic):
-        self.mic = mic
-
-    def datagram_received(self, data, addr):
-        m = self.mic
-        if m.peer and addr[0] != m.peer:
-            return
-        if len(data) < 12 or data[0] >> 6 != 2:
-            return
-        cc = data[0] & 0x0F
-        payload = data[12 + 4 * cc:]
-        n = len(payload) // 2
-        if n and m.on_audio:
-            m._emit(m.on_audio, struct.pack(f"<{n}h", *struct.unpack(f">{n}h", payload[:n * 2])))
 
 
 # What the radio sends a mic after the handshake when it is switched on (captured; the meaning of
@@ -430,9 +512,10 @@ class MicLink:
 
     def __init__(self, mic_ip, on_key=None, on_ptt=None, on_power=None, on_audio=None,
                  on_state=None, on_frame=None, startup=True, local="0.0.0.0", rtp_port=RTP_PORT,
-                 src_port=CTRL_PORT):
+                 src_port=CTRL_PORT, mic_port=CTRL_PORT, mic_rtp_port=RTP_PORT):
         self.mic_ip, self.local, self.startup, self.rtp_port = mic_ip, local, startup, rtp_port
-        self.src_port = src_port
+        self.src_port, self.mic_port, self.mic_rtp_port = src_port, mic_port, mic_rtp_port
+        self.ptt = False
         self.on_key, self.on_ptt, self.on_power = on_key, on_ptt, on_power
         self.on_audio, self.on_state, self.on_frame = on_audio, on_state, on_frame
         self.writer = None
@@ -448,19 +531,23 @@ class MicLink:
         self._closing = False
 
     async def start(self):
-        loop = asyncio.get_running_loop()
-        self._udp, _ = await loop.create_datagram_endpoint(
-            lambda: _MicRtp(self), local_addr=(self.local, self.rtp_port))
+        self._udp = await RtpPort.get(self.local, self.rtp_port)
+        self._udp.add(self._on_rtp, (self.mic_ip, self.mic_rtp_port))
         self._task = asyncio.create_task(self._run())
 
     async def close(self):
+        self.close_now()
+
+    def close_now(self):
         self._closing = True
         if self._task:
             self._task.cancel()
         if self.writer:
             self.writer.close()
         if self._udp:
-            self._udp.close()
+            self._udp.remove((self.mic_ip, self.mic_rtp_port))
+            self._udp.release()
+            self._udp = None
 
     async def _run(self):
         while not self._closing:
@@ -497,6 +584,9 @@ class MicLink:
                 if self.held is not None:
                     self._emit(self.on_key, self.held, False)
                     self.held = None
+                if self.ptt:
+                    self.ptt = False
+                    self._emit(self.on_ptt, False)
             await asyncio.sleep(self.RETRY_S)
 
     async def _connect(self):
@@ -510,7 +600,7 @@ class MicLink:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
             sock.bind((self.local, self.src_port))
             sock.setblocking(False)
-            await loop.sock_connect(sock, (self.mic_ip, CTRL_PORT))
+            await loop.sock_connect(sock, (self.mic_ip, self.mic_port))
         except BaseException:
             sock.close()
             raise
@@ -565,7 +655,10 @@ class MicLink:
                 self.held = k
                 self._emit(self.on_key, k, True)
         elif gc == (0x01, 0x00) and data:
-            self._emit(self.on_ptt, bool(data[0]))
+            on = bool(data[0])
+            if on != self.ptt:
+                self.ptt = on
+                self._emit(self.on_ptt, on)
         elif gc == (0x01, 0x09) and data:
             self._emit(self.on_power, bool(data[0]))
         self._emit(self.on_frame, start, group, cmd, bytes(data))
@@ -593,24 +686,14 @@ class MicLink:
         if not (self._udp and self.connected.is_set()):
             return
         hdr = struct.pack(">BBHII", 0x80, PT, self._seq, self._ts, self._ssrc)
-        self._udp.sendto(hdr + payload_be, (self.mic_ip, RTP_PORT))
+        self._udp.sendto(hdr + payload_be, (self.mic_ip, self.mic_rtp_port))
         self._seq = (self._seq + 1) & 0xFFFF
         self._ts = (self._ts + FRAME) & 0xFFFFFFFF
 
-
-class _MicRtp(asyncio.DatagramProtocol):
-    def __init__(self, link):
-        self.link = link
-
-    def datagram_received(self, data, addr):
-        m = self.link
-        if addr[0] != m.mic_ip or len(data) < 12 or data[0] >> 6 != 2:
-            return
-        if m.rtp_from != addr:
-            m.rtp_from = addr
-            log.info("mic audio from %s:%d", *addr)
-        cc = data[0] & 0x0F
-        payload = data[12 + 4 * cc:]
-        n = len(payload) // 2
-        if n and m.on_audio:
-            m._emit(m.on_audio, struct.pack(f"<{n}h", *struct.unpack(f">{n}h", payload[:n * 2])))
+    def _on_rtp(self, data, addr):
+        if self.rtp_from != addr:
+            self.rtp_from = addr
+            log.info("mic audio from %s:%d", *addr[:2])
+        pcm = rtp_payload(data)
+        if pcm and self.on_audio:
+            self._emit(self.on_audio, pcm)

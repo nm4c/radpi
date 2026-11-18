@@ -85,7 +85,8 @@ There are three hardware modes, set with `radio.type` in `config.yaml`:
   frequency in the band, and an RSSI bar on the display.
 - With an Icom IC-F6330D: the radio's own mic drawn on the page, mirroring its screen, LED and
   keys, with every key (P1-P4, keypad, zone, squelch, volume, menu, power) pressed on the real
-  radio. See [Icom IP mic radio](#icom-ip-mic-radio-ic-f6330d).
+  radio. The real mic can stay in use alongside the page, or drive RadPi with any other radio.
+  See [Icom IP mic radio](#icom-ip-mic-radio-ic-f6330d).
 - Several operators can listen at once. Only one can transmit, and the others see who's on air.
 - Personal accounts with **control** (everything) or **listen** (hear only) roles, an audit log of
   who did what, and login lockout. See [Accounts and security](#accounts-and-security).
@@ -471,6 +472,27 @@ to the radio.
 
 There is no login or encryption in this protocol: keep it on a private network or VPN.
 `python -m server.icom_cli` is a stand-alone mic for trying it from a terminal.
+
+### The real mic as well, or as a control head for any radio
+
+RadPi can also play the radio for a real IC-F6330D mic (`mic_head:` in `config.yaml`):
+
+- **With `radio.type: icom`** RadPi sits between the radio and the mic, so both the mic and the
+  web page work at once. The mic shows the radio's screen and its keys go to the radio as they
+  are. Its PTT is RadPi's PTT for an operator called "Mic": the page shows "Mic" on air, and the
+  audit log, the transmit time limit and one-at-a-time all apply. Program the radio's mic address
+  as the Pi's.
+- **With any other radio** the mic is a control head for RadPi: it shows the channel name, the
+  LED is red while transmitting and green while the squelch is open, and the speaker plays what
+  the radio hears. UP/DOWN change channel, the keypad types a channel number, VOL +/- set its
+  speaker volume, and `mic_head.keys` gives the other keys a channel step, a selcall or a clip.
+
+The mic only answers the radio address it was programmed with, and the radio sends it its
+programming, so it's easiest to leave the mic alone and make the Pi look like the radio instead:
+either give the Pi that address (`mic_head.local`, with the real radio off the network), or have
+the router translate the Pi's traffic to the mic so it comes from that address (static source
+NAT, ports kept as they are, both ways). RadPi connects from TCP port 52001, as the radio does;
+the mic ignores connections from any other port.
 
 ## Install on the Pi
 

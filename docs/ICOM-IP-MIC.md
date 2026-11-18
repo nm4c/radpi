@@ -82,4 +82,14 @@ P4 ("send call") makes the radio transmit by itself: it sends `01 04 [08]` witho
 
 **Levels:** the real mic peaks around −18 dBFS and is about −40 dBFS RMS. Receive audio is about −43 dBFS RMS. Send at mic level or the radio will over-deviate.
 
+**Playing the radio for a real mic** (`MicLink` in `server/icom_ipmic.py`):
+- The mic accepts TCP from its programmed radio address only (anything else is closed straight
+  away, before any frame), and only from source port 52001.
+- After the handshake, the captured power-on sequence (`02 06` … `02 0e`) replayed as it is gets
+  it going; then it takes display, LED, backlight and audio routing frames like the radio's.
+- It sends its audio to its programmed radio address, port 50000.
+- Programming the radio over IP (TCP 53000 from the programming software) sent nothing to the
+  mic on this link: the radio showed "PROGRAM", then restarted the session as at power on. The
+  radio keeps the mic's MAC and IP address with its own.
+
 **Not yet seen:** the menu (`EMERG` held), and what the radio sends if the TCP link drops in the middle of a transmission.

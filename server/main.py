@@ -161,6 +161,12 @@ class RemoteHead:
         if cfg["bot"]["enabled"]:
             from .bot import Agent
             self.bot = Agent(cfg, self)
+        # A real Icom IP mic as a control head (mic_head.mic_ip): with radio.type icom it sits
+        # between the radio and RadPi, otherwise it drives RadPi's radio itself.
+        self.mic_head = None
+        if cfg["mic_head"]["mic_ip"]:
+            from .michead import MicHead
+            self.mic_head = MicHead(cfg, self)
         # The screen on the Pi (display.enabled): Pimoroni Display HAT Mini.
         self.display = None
         if cfg["display"]["enabled"]:
@@ -199,6 +205,8 @@ class RemoteHead:
     def _client(self, cid):
         if self.bot and cid == self.bot.operator.id:
             return self.bot.operator
+        if self.mic_head and cid == self.mic_head.op.id:
+            return self.mic_head.op
         return next((c for c in self.clients if c.id == cid), None)
 
     def _spawn(self, coro):
@@ -233,7 +241,8 @@ class RemoteHead:
                 "by": owner.name if owner else None,
                 "remaining_s": remaining,
             },
-            "operators": sorted(x.name for x in self._authed()),
+            "operators": sorted([x.name for x in self._authed()]
+                                + (["Mic"] if self.mic_head and self.mic_head.connected else [])),
             "selcall_tx": self.selcall_tx,
             "clip_tx": {"id": self.clip_tx["id"], "name": self.clip_tx["name"]} if self.clip_tx else None,
             "bot_tx": self.bot_tx["text"] if self.bot_tx else None,
@@ -263,6 +272,8 @@ class RemoteHead:
                                active=keyed or self._busy())
         if self.bot:
             self.bot.feed(pcm, self._busy(), owner is not None)
+        if self.mic_head:
+            self.mic_head.feed_rx(pcm)
         if self.selcall_rx:
             if owner is None:
                 for digits in self.selcall_rx.feed(pcm):
@@ -1183,6 +1194,7 @@ class RemoteHead:
         app["radio"] = asyncio.create_task(self.radio.run())
         app["bot"] = asyncio.create_task(self.bot.run()) if self.bot else None
         app["display"] = asyncio.create_task(self.display.run()) if self.display else None
+        app["mic_head"] = asyncio.create_task(self.mic_head.run()) if self.mic_head else None
 
     async def on_shutdown(self, app):
         self.radio.unkey("shutdown")
@@ -1193,7 +1205,7 @@ class RemoteHead:
             await c.ws.close(code=1001, message=b"server shutdown")
 
     async def on_cleanup(self, app):
-        for key in ("watchdog", "radio", "bot", "display"):
+        for key in ("watchdog", "radio", "bot", "display", "mic_head"):
             if app[key] is None:
                 continue
             app[key].cancel()
@@ -1203,6 +1215,8 @@ class RemoteHead:
                 pass
         if self.display:
             self.display.close()
+        if self.mic_head:
+            self.mic_head.close()
         self.radio.close()
         self.audio.stop()
         if self.recorder:
