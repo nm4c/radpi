@@ -121,7 +121,15 @@ class MicHeads:
             h.feed_rx(pcm)
 
     async def run(self):
-        await asyncio.gather(*(h.run() for h in self.heads))
+        log.info("mic head: %d mic(s): %s", len(self.heads),
+                 ", ".join(f"{h.op.name} at {h.cfg['mic_ip']}" for h in self.heads))
+        try:
+            await asyncio.gather(*(h.run() for h in self.heads))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("mic head stopped")
+            raise
 
     def close(self):
         for h in self.heads:
