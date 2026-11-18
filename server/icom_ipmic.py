@@ -52,8 +52,9 @@ LED_GREEN = 0x04               # busy / squelch open
 DISPLAY_LEN = 68               # 02 0a payload: 8 characters + icon bytes
 DEFAULT_ICONS = bytes(48) + b"\x80"   # payload byte 56 = 0x80 in nearly every captured screen
 
-# what the real mic sends after 05 01; "Icom Inc" and what looks like a serial number
-IDENT = bytes.fromhex("010101ffffffff60cc49636f6d20496e630100" "90c712982b5a68")
+# what the real mic sends after 05 01: "Icom Inc", then its MAC address (00:90:c7 is Icom's)
+# and two bytes not yet known. The radio doesn't check the MAC; this one is made up.
+IDENT = bytes.fromhex("010101ffffffff60cc49636f6d20496e6301" "0090c7000001" "5a68")
 
 
 def crc16(data):

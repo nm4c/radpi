@@ -30,7 +30,7 @@ f3 41 71 | group | cmd | len (2, BE) | data | crc (2, BE) | fd
 | R→M | `05 05 [01]` | Hello |
 | M→R | `01 0a [00]`, `01 00 [00]`, `01 01 [7f]`, `01 01 [1f]`, `05 06 [00]` | Mic state: PTT up, no keys held |
 | R→M | `05 01 [01]` | Asks for the mic's ID |
-| M→R | `05 02 [26 bytes]` | ID: `01 01 01 ff ff ff ff 60 cc` "Icom Inc" `01 00` + 7-byte serial(?). The mic also sends one silent RTP packet |
+| M→R | `05 02 [26 bytes]` | ID: `01 01 01 ff ff ff ff 60 cc` "Icom Inc" `01`, the mic's MAC address (6 bytes, `00 90 c7 …`), then 2 unknown bytes. The radio doesn't seem to check it. The mic also sends one silent RTP packet |
 | R→M | `02 06`, `02 0b`, `01 04`, `01 08`, `02 02`, `02 01`, `06 09` (32 bytes), `06 0a` (10-step table, probably the volume curve), `02 0d`, `02 0e` | Startup (power on) |
 | R→M / M→R | `05 00 [4d 00]` / `05 00 [6d 01]` | Keepalive every 2 s, from the radio; the mic answers |
 | R→M | `f5 … 05 03 [01 or 02]` | Radio closing the session: `01` = powering on (it reconnects with the full startup), `02` = powering off (it reconnects to a blank radio) |
