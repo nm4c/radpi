@@ -19,6 +19,7 @@ import asyncio
 import logging
 import os
 import random
+import socket
 import struct
 import time
 
@@ -427,8 +428,10 @@ class MicLink:
     RETRY_S = 3.0
 
     def __init__(self, mic_ip, on_key=None, on_ptt=None, on_power=None, on_audio=None,
-                 on_state=None, on_frame=None, startup=True, local="0.0.0.0", rtp_port=RTP_PORT):
+                 on_state=None, on_frame=None, startup=True, local="0.0.0.0", rtp_port=RTP_PORT,
+                 src_port=CTRL_PORT):
         self.mic_ip, self.local, self.startup, self.rtp_port = mic_ip, local, startup, rtp_port
+        self.src_port = src_port
         self.on_key, self.on_ptt, self.on_power = on_key, on_ptt, on_power
         self.on_audio, self.on_state, self.on_frame = on_audio, on_state, on_frame
         self.writer = None
@@ -461,10 +464,9 @@ class MicLink:
     async def _run(self):
         while not self._closing:
             try:
-                reader, writer = await asyncio.wait_for(
-                    asyncio.open_connection(self.mic_ip, CTRL_PORT), 5)
+                reader, writer = await asyncio.wait_for(self._connect(), 5)
             except (OSError, asyncio.TimeoutError) as e:
-                log.debug("mic %s: %s", self.mic_ip, e)
+                log.info("mic %s: %s", self.mic_ip, e or "no answer")
                 await asyncio.sleep(self.RETRY_S)
                 continue
             log.info("connected to mic %s", self.mic_ip)
@@ -476,7 +478,10 @@ class MicLink:
                 while True:
                     data = await reader.read(4096)
                     if not data:
+                        log.info("mic closed the connection%s",
+                                 "" if self.connected.is_set() else " before the handshake finished")
                         break
+                    log.debug("mic raw %s", data.hex(" "))
                     for f in parser.feed(data):
                         self._handle(*f)
             except (ConnectionError, OSError) as e:
@@ -492,6 +497,23 @@ class MicLink:
                     self._emit(self.on_key, self.held, False)
                     self.held = None
             await asyncio.sleep(self.RETRY_S)
+
+    async def _connect(self):
+        """The radio always connects from port 52001 to 52001, and the mic ignores anything
+        else, so bind the source port too."""
+        loop = asyncio.get_running_loop()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if hasattr(socket, "SO_REUSEPORT"):
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            sock.bind((self.local, self.src_port))
+            sock.setblocking(False)
+            await loop.sock_connect(sock, (self.mic_ip, CTRL_PORT))
+        except BaseException:
+            sock.close()
+            raise
+        return await asyncio.open_connection(sock=sock)
 
     async def _keepalive(self):
         while True:
