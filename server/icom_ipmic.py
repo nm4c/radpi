@@ -48,6 +48,9 @@ AUDIO_TX = 0x08                # radio wants mic audio (transmitting)
 LED_RED = 0x02                 # transmitting
 LED_GREEN = 0x04               # busy / squelch open
 
+DISPLAY_LEN = 68               # 02 0a payload: 8 characters + icon bytes
+DEFAULT_ICONS = bytes(48) + b"\x80"   # payload byte 56 = 0x80 in nearly every captured screen
+
 # what the real mic sends after 05 01; "Icom Inc" and what looks like a serial number
 IDENT = bytes.fromhex("010101ffffffff60cc49636f6d20496e630100" "90c712982b5a68")
 
@@ -134,6 +137,22 @@ def display_text(data):
         if b & 0x80:
             s += "."
     return s.rstrip()
+
+
+def display_bytes(text, flags=b""):
+    """The other way round: text (up to 8 characters, a '.' folds into the one before it) and
+    the icon bytes after it -> a 68-byte 02 0a payload."""
+    out = bytearray()
+    for ch in str(text):
+        if ch == "." and out and not out[-1] & 0x80:
+            out[-1] |= 0x80
+            continue
+        if len(out) == 8:
+            break
+        c = ord(ch)
+        out.append(c if 0x20 <= c < 0x7F else 0x3F)
+    out = bytes(out).ljust(8, b"\0") + bytes(flags)[:DISPLAY_LEN - 8]
+    return out.ljust(DISPLAY_LEN, b"\0")
 
 
 def display_flags(data):
@@ -374,6 +393,199 @@ class _Rtp(asyncio.DatagramProtocol):
             return
         if len(data) < 12 or data[0] >> 6 != 2:
             return
+        cc = data[0] & 0x0F
+        payload = data[12 + 4 * cc:]
+        n = len(payload) // 2
+        if n and m.on_audio:
+            m._emit(m.on_audio, struct.pack(f"<{n}h", *struct.unpack(f">{n}h", payload[:n * 2])))
+
+
+# What the radio sends a mic after the handshake when it is switched on (captured; the meaning of
+# 06 09 / 06 0a / 02 0d is not known, they are replayed as they are).
+STARTUP = [
+    (0x02, 0x06, "01000000"), (0x02, 0x0B, "00"), (0x01, 0x04, "00000000"), (0x01, 0x08, "00"),
+    (0x02, 0x02, "00"), (0x02, 0x01, "ff"), (0x01, 0x08, "01"), (0x02, 0x0B, "02"),
+    (0x06, 0x09, "00" * 32), (0x06, 0x0A, "7c706050423b342d2620"), (0x02, 0x0D, "000401"),
+    (0x02, 0x0E, "04"), (0x02, 0x0E, "05"),
+]
+
+
+class MicLink:
+    """Plays the radio's part for a real IP mic: connects out to it, does the handshake and
+    keepalives, and lets the caller drive the screen, LED and speaker.
+
+    Callbacks (optional, plain functions):
+      on_key(code, down)     a key (KEYS code; down False = released)
+      on_ptt(bool)           PTT bar
+      on_power(bool)         power key down / up
+      on_audio(pcm)          mic audio, int16 little-endian at 8 kHz (only sent while asked for)
+      on_state(name)         'connected' / 'disconnected'
+      on_frame(start, group, cmd, data)   every frame from the mic (after the above)
+    """
+
+    KEEPALIVE_S = 2.0
+    RETRY_S = 3.0
+
+    def __init__(self, mic_ip, on_key=None, on_ptt=None, on_power=None, on_audio=None,
+                 on_state=None, on_frame=None, startup=True, local="0.0.0.0", rtp_port=RTP_PORT):
+        self.mic_ip, self.local, self.startup, self.rtp_port = mic_ip, local, startup, rtp_port
+        self.on_key, self.on_ptt, self.on_power = on_key, on_ptt, on_power
+        self.on_audio, self.on_state, self.on_frame = on_audio, on_state, on_frame
+        self.writer = None
+        self.connected = asyncio.Event()
+        self.ident = None
+        self.held = None
+        self.rtp_from = None           # where the mic's audio actually came from (diagnostics)
+        self._udp = None
+        self._task = None
+        self._seq = random.randrange(65536)
+        self._ts = random.randrange(1 << 32)
+        self._ssrc = random.randrange(1 << 32)
+        self._closing = False
+
+    async def start(self):
+        loop = asyncio.get_running_loop()
+        self._udp, _ = await loop.create_datagram_endpoint(
+            lambda: _MicRtp(self), local_addr=(self.local, self.rtp_port))
+        self._task = asyncio.create_task(self._run())
+
+    async def close(self):
+        self._closing = True
+        if self._task:
+            self._task.cancel()
+        if self.writer:
+            self.writer.close()
+        if self._udp:
+            self._udp.close()
+
+    async def _run(self):
+        while not self._closing:
+            try:
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(self.mic_ip, CTRL_PORT), 5)
+            except (OSError, asyncio.TimeoutError) as e:
+                log.debug("mic %s: %s", self.mic_ip, e)
+                await asyncio.sleep(self.RETRY_S)
+                continue
+            log.info("connected to mic %s", self.mic_ip)
+            self.writer = writer
+            ka = asyncio.create_task(self._keepalive())
+            parser = Parser()
+            try:
+                self._send(frame(0x05, 0x05, b"\x01"))
+                while True:
+                    data = await reader.read(4096)
+                    if not data:
+                        break
+                    for f in parser.feed(data):
+                        self._handle(*f)
+            except (ConnectionError, OSError) as e:
+                log.info("mic link: %s", e)
+            finally:
+                ka.cancel()
+                self.writer = None
+                writer.close()
+                if self.connected.is_set():
+                    self.connected.clear()
+                    self._emit(self.on_state, "disconnected")
+                if self.held is not None:
+                    self._emit(self.on_key, self.held, False)
+                    self.held = None
+            await asyncio.sleep(self.RETRY_S)
+
+    async def _keepalive(self):
+        while True:
+            await asyncio.sleep(self.KEEPALIVE_S)
+            self._send(frame(0x05, 0x00, b"\x4d\x00"))
+
+    def _send(self, raw):
+        if self.writer:
+            self.writer.write(raw)
+
+    def send_frame(self, group, cmd, data=b"", start=0xF3):
+        self._send(frame(group, cmd, data, start))
+
+    def _emit(self, cb, *a):
+        if cb:
+            try:
+                cb(*a)
+            except Exception:
+                log.exception("callback")
+
+    def _handle(self, start, group, cmd, data):
+        if group == 0xEE:
+            if cmd == (0x05, 0x03) and self.writer:      # mic acked our goodbye
+                pass
+            return
+        if start == 0xF5:
+            self._send(ack(group, cmd))
+        gc = (group, cmd)
+        if gc == (0x05, 0x06):                           # end of the mic's hello
+            self._send(frame(0x05, 0x01, b"\x01"))
+        elif gc == (0x05, 0x02):                         # its ID
+            self.ident = bytes(data)
+            if self.startup:
+                self._send(b"".join(frame(g, c, bytes.fromhex(d)) for g, c, d in STARTUP))
+            self.connected.set()
+            self._emit(self.on_state, "connected")
+        elif gc == (0x05, 0x04):                         # mic's goodbye
+            if self.writer:
+                self.writer.close()
+        elif gc == (0x01, 0x01) and data:
+            k = data[0]
+            if k == NO_KEY:
+                pass
+            elif k & 0x80:
+                self.held = None
+                self._emit(self.on_key, k & 0x7F, False)
+            elif k != 0x1F:                              # 1f only appears in the hello
+                self.held = k
+                self._emit(self.on_key, k, True)
+        elif gc == (0x01, 0x00) and data:
+            self._emit(self.on_ptt, bool(data[0]))
+        elif gc == (0x01, 0x09) and data:
+            self._emit(self.on_power, bool(data[0]))
+        self._emit(self.on_frame, start, group, cmd, bytes(data))
+
+    # ---- screen, LED, audio routing
+    def display(self, text, flags=DEFAULT_ICONS):
+        self._send(frame(0x02, 0x07, b"\x02") + frame(0x02, 0x0A, display_bytes(text, flags))
+                   + frame(0x02, 0x08, b"\x00\x44"))
+
+    def led(self, red=False, green=False):
+        self._send(frame(0x02, 0x02, bytes(((LED_RED if red else 0) | (LED_GREEN if green else 0),))))
+
+    def backlight(self, on):
+        self._send(frame(0x02, 0x0B, b"\x02" if on else b"\x00"))
+
+    def audio_flags(self, rx=False, tx=False):
+        f = (AUDIO_RX if rx else 0) | (AUDIO_TX if tx else 0)
+        self._send(frame(0x01, 0x04, bytes((f, 0, 0, 0))))
+
+    def goodbye(self, power_off=True):
+        self._send(frame(0x05, 0x03, b"\x02" if power_off else b"\x01", start=0xF5))
+
+    def send_audio(self, payload_be):
+        """One 20 ms packet of int16 big-endian PCM to the mic's speaker."""
+        if not (self._udp and self.connected.is_set()):
+            return
+        hdr = struct.pack(">BBHII", 0x80, PT, self._seq, self._ts, self._ssrc)
+        self._udp.sendto(hdr + payload_be, (self.mic_ip, RTP_PORT))
+        self._seq = (self._seq + 1) & 0xFFFF
+        self._ts = (self._ts + FRAME) & 0xFFFFFFFF
+
+
+class _MicRtp(asyncio.DatagramProtocol):
+    def __init__(self, link):
+        self.link = link
+
+    def datagram_received(self, data, addr):
+        m = self.link
+        if addr[0] != m.mic_ip or len(data) < 12 or data[0] >> 6 != 2:
+            return
+        if m.rtp_from != addr:
+            m.rtp_from = addr
+            log.info("mic audio from %s:%d", *addr)
         cc = data[0] & 0x0F
         payload = data[12 + 4 * cc:]
         n = len(payload) // 2
