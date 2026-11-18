@@ -1,7 +1,7 @@
 """Stand-alone test client for the Icom IP mic protocol: run it on the Pi in place of the mic.
 
     python -m server.icom_cli [--radio <radio address>] [--record rx.wav] [--gain 0.25] [-v]
-    python -m server.icom_cli --mic <mic address> [-v]      (the other way round: be the radio)
+    python -m server.icom_cli --mic <mic address> [--listen <address>] [-v]   (be the radio)
 
 The radio connects to whatever address it is programmed with for the mic, so give the Pi that
 address (or point the radio at the Pi) and unplug the real mic first. Then type:
@@ -15,7 +15,9 @@ address (or point the radio at the Pi) and unplug the real mic first. Then type:
     status                    screen, LED, link
     quit
 
-With --mic the Pi plays the radio for a real mic (unplug or repoint the real radio first). Keys
+With --mic the Pi plays the radio for a real mic (unplug or repoint the real radio first). The
+mic only talks to the radio address it is programmed with, so the Pi has to connect from that
+address (--listen); the mic sends its audio there too. Keys
 pressed on the mic show on its screen, and PTT works like a parrot: what you say is played back
 through the mic's speaker when you let go. Commands:
 
@@ -124,7 +126,7 @@ async def radio_mode(a):
         if st["ptt"]:
             st["rec"] += pcm
 
-    link = MicLink(a.mic, on_key=on_key, on_ptt=on_ptt, on_audio=on_audio, on_state=on_state,
+    link = MicLink(a.mic, local=a.listen, on_key=on_key, on_ptt=on_ptt, on_audio=on_audio, on_state=on_state,
                    on_power=lambda on: say("power key", "down" if on else "up"),
                    on_frame=(lambda s, g, c, d: say(f"mic {s:02x} {g:02x} {c:02x} {d.hex(' ')}"))
                    if a.v else None)
@@ -181,7 +183,8 @@ async def main():
     ap.add_argument("--mic", help="be the radio and connect to the real mic at this address")
     ap.add_argument("--gain-back", type=float, default=4.0,
                     help="--mic: gain for playing your voice back (the mic is quiet)")
-    ap.add_argument("--listen", default="0.0.0.0")
+    ap.add_argument("--listen", default="0.0.0.0",
+                    help="address to listen on (with --mic: the address to connect from)")
     ap.add_argument("--radio", help="only accept the radio from this address")
     ap.add_argument("--record", help="write speaker audio to this WAV")
     ap.add_argument("--gain", type=float, default=0.25,
