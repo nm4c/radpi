@@ -1182,8 +1182,8 @@ class RemoteHead:
                 if rssi is not None:
                     meter["rssi"] = rssi
                     off = self.cfg["sa818"]["rssi_offset_db"]
-                    if off is not None:
-                        meter["rssi_dbm"] = rssi + float(off)
+                    if off is not None:   # shown from -127 dBm (nothing) to 0 dBm (strongest)
+                        meter["rssi_dbm"] = max(-127.0, min(0.0, rssi + float(off)))
                 for c in self._authed():
                     c.send_json(meter)
 

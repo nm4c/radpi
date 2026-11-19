@@ -220,7 +220,7 @@ sa818:
     highpass: true
     lowpass: true
   rssi_ms: 500          # how often to read signal strength while receiving
-  rssi_offset_db: null  # set to show dBm: dBm = RSSI + offset (calibrate against a known signal)
+  rssi_offset_db: -127  # dBm = RSSI + offset, shown from -127 to 0 dBm (null: show the raw reading)
 
 # ---- AI agent ------------------------------------------------------------------------------
 # Listens to the channel, transcribes every over, learns voices (people you name, and new voices
