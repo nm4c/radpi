@@ -6,7 +6,7 @@ TLV320AIC3104 I2S codec as the [RadPi Control HAT](../pihat/). It's meant for li
 experimental use.
 
 <p align="center">
-  <img src="sa818s-hat.png" alt="3D render of the RadPi SA818 HAT v1.1: blue board with the Pi header along the top, the SA818S module in the middle, the codec and crystal at top right, the 4.2 V regulator at top left, the 7th-order harmonic filter along the bottom edge and the vertical SMA antenna socket at bottom right" width="80%">
+  <img src="sa818s-hat.png" alt="3D render of the RadPi SA818 HAT v1.1, with the Pi header along the top, the SA818S module in the middle, the codec and crystal at top right, the 4.2 V regulator at top left, the 7th-order harmonic filter along the bottom edge and the vertical SMA antenna socket at bottom right. The RadPi logo, github.com/nm4c/radpi and CERN-OHL-S-2.0 are on the silkscreen at bottom left, and RadPi SA818 Hat v1.1 © NMc 2026 runs up the right edge" width="80%">
 </p>
 
 | Block | What's on the board |
