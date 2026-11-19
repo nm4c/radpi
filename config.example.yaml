@@ -200,8 +200,10 @@ webrtc:
 # ---- RadPi SA818 HAT (radio.type: sa818) ---------------------------------------------------
 # On the HAT: PTT = GPIO17 (gpio.ptt_pin, active_high true), busy = the module's AudioON on GPIO23,
 # so set gpio.busy_pin: 23 and busy_pull_up: true. gpio.up_pin/down_pin aren't used.
-# The Pi 4's main UART is used by Bluetooth: add  dtoverlay=disable-bt  to /boot/firmware/config.txt,
-# and turn off the serial console (sudo raspi-config > Interface > Serial: login shell No, hardware Yes).
+# The module is on the UART on GPIO14/15. Pi 4: Bluetooth normally has it, so add  dtoverlay=disable-bt
+# to /boot/firmware/config.txt and turn off the serial console (sudo raspi-config > Interface > Serial:
+# login shell No, hardware Yes); the port is /dev/serial0. Pi 5: add  dtparam=uart0=on  and use
+# port: /dev/ttyAMA0 (on a Pi 5, /dev/serial0 is the separate 3-pin debug connector).
 sa818:
   port: /dev/serial0
   baud: 9600

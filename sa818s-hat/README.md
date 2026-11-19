@@ -38,8 +38,7 @@ schematic.
 | 16 | 23 | Busy: low = signal present (`busy_pin: 23`, `busy_pull_up: true`) |
 | 12, 35, 38, 40 / 3, 5 / 37 | 18–21 / 2, 3 / 26 | I2S, I2C and reset for the codec |
 
-The Pi 4's main UART is normally used by Bluetooth. Add `dtoverlay=disable-bt` (or `miniuart-bt`) to
-`/boot/firmware/config.txt`.
+The UART set-up differs between the Pi 4 and Pi 5: see Software below.
 
 ## Files
 
@@ -83,9 +82,19 @@ Set `radio.type: sa818` in `config.yaml` (see `config.example.yaml`):
 - RSSI is the module's raw 0–255 reading in 1 dB steps. Set `sa818.rssi_offset_db` after checking it against a
   known signal to show dBm.
 
-Pi 4 set-up: `dtoverlay=disable-bt` in `/boot/firmware/config.txt`, the serial console off and the serial
-hardware on (`raspi-config` → Interface Options → Serial Port), then reboot. The installer adds the service user
-to `dialout` for `/dev/serial0`.
+Pi set-up, in `/boot/firmware/config.txt`, then reboot:
+
+- **Serial port (the module):**
+  - **Pi 4:** `dtoverlay=disable-bt`, with the serial console off and the serial hardware on
+    (`raspi-config` → Interface Options → Serial Port). The port is `/dev/serial0`.
+  - **Pi 5:** `dtparam=uart0=on`, and `sa818.port: /dev/ttyAMA0` in `config.yaml`. On a Pi 5,
+    `/dev/serial0` is the separate 3-pin debug connector, not GPIO14/15.
+- **Codec (the sound card):** `dtparam=i2c_arm=on`, `dtparam=i2s=on` and `dtoverlay=radpi-codec`, after
+  building the overlay from the clone (`deploy/overlays/radpi-codec.dts`, instructions at its top). After the
+  reboot, `sudo deploy/radpi-mixer.sh sa818` sets the codec's inputs and outputs, and `config.yaml` needs
+  `audio.input_device: RadPi` and `audio.output_device: RadPi`.
+
+The installer adds the service user to `dialout` for the serial port.
 
 ## Licence
 
