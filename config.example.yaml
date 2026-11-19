@@ -99,6 +99,8 @@ audio:
   tx_treble_db: -3     # cut above tx_treble_hz (negative = less treble)
   tx_treble_hz: 2500
   busy_threshold_dbfs: -45  # RX level considered "signal present" if no busy_pin
+  share_tx: true            # while one operator (or mic) transmits, the others hear what went on air
+  share_tx_gain: 1.0        #   at this level: turn down if it's louder than received audio
 
 display:               # Pimoroni Display HAT Mini on top of the HAT (see README: take its RGB LED off,
   enabled: false       # and add dtparam=spi=on to /boot/firmware/config.txt)

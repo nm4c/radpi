@@ -92,7 +92,8 @@ There are three hardware modes, set with `radio.type` in `config.yaml`:
   keys, with every key (P1-P4, keypad, zone, squelch, volume, menu, power) pressed on the real
   radio. The real mic can stay in use alongside the page, or drive RadPi with any other radio.
   See [Icom IP mic radio](#icom-ip-mic-radio-ic-f6330d).
-- Several operators can listen at once. Only one can transmit, and the others see who's on air.
+- Several operators can listen at once. Only one can transmit, and the others see who's on air
+  and hear what they're sending, as they would on another radio (`audio.share_tx`).
 - Personal accounts with **control** (everything) or **listen** (hear only) roles, an audit log of
   who did what, and login lockout. See [Accounts and security](#accounts-and-security).
 - Safety features:

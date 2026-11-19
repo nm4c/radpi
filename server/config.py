@@ -106,6 +106,8 @@ DEFAULTS = {
         "tx_treble_db": -3,       #   treble shelf: cut (negative) or boost above this frequency
         "tx_treble_hz": 2500,
         "busy_threshold_dbfs": -45,
+        "share_tx": True,         # while one operator (or mic) transmits, the others hear what went on air
+        "share_tx_gain": 1.0,     #   at this level (it is often louder than received audio: turn down to match)
     },
     "display": {                    # Pimoroni Display HAT Mini on the Pi (server/display.py)
         "enabled": False,
@@ -350,6 +352,8 @@ def load(path):
             raise SystemExit(f"config: audio.{key} must be between -20 and 20 (0 = flat)")
     if not 100 <= float(a["tx_bass_hz"]) <= 1500 or not 1000 <= float(a["tx_treble_hz"]) <= 6000:
         raise SystemExit("config: audio.tx_bass_hz must be 100-1500 and audio.tx_treble_hz 1000-6000")
+    if not 0 < float(a["share_tx_gain"]) <= 4:
+        raise SystemExit("config: audio.share_tx_gain must be more than 0 and at most 4")
     kind = cfg["radio"]["type"]
     if kind not in ("buttons", "sa818", "icom"):
         raise SystemExit("config: radio.type must be buttons, sa818 or icom")

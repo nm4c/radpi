@@ -272,14 +272,22 @@ class RemoteHead:
                                active=keyed or self._busy())
         if self.bot:
             self.bot.feed(pcm, self._busy(), owner is not None)
-        if self.mic_head:
-            self.mic_head.feed_rx(pcm)
         if self.selcall_rx:
             if owner is None:
                 for digits in self.selcall_rx.feed(pcm):
                     self._selcall_event("rx", digits)
             else:
                 self.selcall_rx.blank()  # our own transmission: drop half sequences, skip their tails
+        # While someone transmits the receiver is muted: everyone else hears what went on air
+        # instead (audio.share_tx), the way they would on another radio.
+        shared = None
+        if owner is not None and self.cfg["audio"]["share_tx"]:
+            g = float(self.cfg["audio"]["share_tx_gain"])
+            shared = sent if g == 1 else (np.clip(np.frombuffer(sent, "<i2") * g, -32768, 32767)
+                                         .astype("<i2").tobytes())
+        if self.mic_head:
+            self.mic_head.feed_rx(pcm, shared)
+        out = shared if shared is not None else pcm
         silence = None
         for c in self.clients:
             if not c.authed:
@@ -288,9 +296,9 @@ class RemoteHead:
                 # keep the stream running for the transmitting operator, but silent
                 if c.id == owner:
                     silence = silence or bytes(len(pcm))
-                c.rtc.feed(silence if c.id == owner else pcm)
+                c.rtc.feed(silence if c.id == owner else out)
             elif c.id != owner:
-                c.send_audio(pcm)
+                c.send_audio(out)
 
     # ---- WebRTC ----------------------------------------------------------
 

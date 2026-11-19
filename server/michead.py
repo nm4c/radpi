@@ -27,7 +27,7 @@ import time
 import numpy as np
 
 from .audio import Decimator, Interpolator
-from .icom_ipmic import AUDIO_TX, DEFAULT_ICONS, FRAME, KEYS, RATE, MicLink, frame
+from .icom_ipmic import AUDIO_RX, AUDIO_TX, DEFAULT_ICONS, FRAME, KEYS, RATE, MicLink, frame
 
 log = logging.getLogger("michead")
 
@@ -116,9 +116,9 @@ class MicHeads:
     def connected_names(self):
         return [h.op.name for h in self.heads if h.connected]
 
-    def feed_rx(self, pcm):
+    def feed_rx(self, pcm, shared=None):
         for h in self.heads:
-            h.feed_rx(pcm)
+            h.feed_rx(pcm, shared)
 
     async def run(self):
         log.info("mic head: %d mic(s): %s", len(self.heads),
@@ -175,6 +175,7 @@ class MicHead:
         self._cache = {}
         self._screen = None
         self._radio_link = None
+        self._flags_sent = None
 
     # ---- lifecycle
     async def run(self):
@@ -215,24 +216,38 @@ class MicHead:
         elif (group, cmd) not in ((0x02, 0x07), (0x02, 0x08)):
             self._cache[(group, cmd)] = data
         if (group, cmd) == (0x01, 0x04):
-            data = self._mask_tx(data)
-        if self.connected:
+            self._sync_flags()
+        elif self.connected:
             self.link.send_frame(group, cmd, data)
 
-    def _mask_tx(self, data):
-        """The radio asks for mic audio when anyone transmits: only pass that on to the mic when
-        it is this mic's transmission, or the radio's own (P4's send call) started from this mic."""
+    def _flags_payload(self):
+        """01 04 for this mic: the radio's, except that it only asks this mic for audio when it
+        is this mic's transmission (or the radio's own, P4's send call, started from this mic),
+        and says "speaker audio" while this mic is hearing someone else transmit."""
+        base = self._cache.get((0x01, 0x04)) or bytes(4)
+        f = base[0]
         owner = self.radio.ptt_owner
         mine = owner == self.op.id or (owner is None and self.group.last_key is self)
-        if data and data[0] & AUDIO_TX and not mine:
-            return bytes((data[0] & ~AUDIO_TX,)) + bytes(data[1:])
-        return data
+        if f & AUDIO_TX and not mine:
+            f &= ~AUDIO_TX
+        if self._spk:
+            f |= AUDIO_RX
+        return bytes((f,)) + bytes(base[1:])
+
+    def _sync_flags(self):
+        if not self.connected:
+            return
+        data = self._flags_payload()
+        if data != self._flags_sent:
+            self._flags_sent = data
+            self.link.send_frame(0x01, 0x04, data)
 
     def _replay(self):
         if not self.radio.link:
             self.link.display("NO RADIO")
             return
-        out = b"".join(frame(g, c, self._mask_tx(d) if (g, c) == (0x01, 0x04) else d)
+        self._flags_sent = self._flags_payload()
+        out = b"".join(frame(g, c, self._flags_sent if (g, c) == (0x01, 0x04) else d)
                        for (g, c), d in self._cache.items())
         if self._screen is not None:
             out += frame(0x02, 0x07, b"\x02") + frame(0x02, 0x0A, self._screen) + frame(0x02, 0x08, b"\x00\x44")
@@ -347,28 +362,35 @@ class MicHead:
         self.server.audio.push_tx((y * 32767).astype("<i2").tobytes())
 
     # ---- speaker: called with every frame of received audio (wire rate, int16 LE)
-    def feed_rx(self, pcm):
+    def feed_rx(self, pcm, shared=None):
+        """One frame of received audio. shared: while someone transmits, what went on air (the
+        receiver is muted then), so a mic hears the others' transmissions but not its own."""
         if not self.connected:
             return
-        want = self._speaker_on()
+        owner = self.radio.ptt_owner
+        if owner is not None:
+            src = shared if owner != self.op.id else None
+        else:
+            src = pcm if self._speaker_on() else None
+        want = src is not None
         if want != self._spk:
             self._spk = want
             self._rx8 = np.zeros(0, np.float32)
             self.down = Decimator(self.m)
-            if not self.proxy:
+            if self.proxy:
+                self._sync_flags()
+            else:
                 self._send_audio_flags()
         if not want:
             return
         g = self.rx_gain * (1.0 if self.proxy else self._vol_gain())
-        x = self.down(np.frombuffer(pcm, "<i2").astype(np.float32) * (g / 32768))
+        x = self.down(np.frombuffer(src, "<i2").astype(np.float32) * (g / 32768))
         self._rx8 = np.concatenate([self._rx8, x])
         while len(self._rx8) >= FRAME:
             chunk, self._rx8 = self._rx8[:FRAME], self._rx8[FRAME:]
             self.link.send_audio((np.clip(chunk, -1, 1) * 32767).astype(">i2").tobytes())
 
     def _speaker_on(self):
-        if self.radio.ptt_owner is not None:
-            return False
         if self.proxy:
             return bool(self.radio.link and self.radio.mic.flags & 0x01)
         return bool(self.server._busy())
