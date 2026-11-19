@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 0 520 210" width="520" height="210" role="img" aria-label="RadPi">
+<style>
+  .ink{fill:#1d2733}.wave{stroke:#00a7c4}.mast{stroke:#2b3542}.tag{fill:#5b6775}
+  @media (prefers-color-scheme: dark){.ink{fill:#eef2f6}.mast{stroke:#dfe6ee}.wave{stroke:#3fd2ea}.tag{fill:#9aa7b4}}
+</style>
+<defs>
+  <radialGradient id="dr" cx="36%" cy="30%" r="78%">
+    <stop offset="0" stop-color="#ff7aa0"/><stop offset=".5" stop-color="#e2245c"/><stop offset="1" stop-color="#9c103c"/>
+  </radialGradient>
+  <linearGradient id="calyx" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#6ddc77"/><stop offset="1" stop-color="#2e9c45"/>
+  </linearGradient>
+</defs>
+<g transform="translate(0 0)">
+<path class="wave" d="M83.8 46.1 A18 18 0 0 1 92.1 37.8" fill="none" stroke-width="6.5" stroke-linecap="round" opacity="1.00"/>
+<path class="wave" d="M107.9 37.8 A18 18 0 0 1 116.2 46.1" fill="none" stroke-width="6.5" stroke-linecap="round" opacity="1.00"/>
+<path class="wave" d="M72.1 40.4 A31 31 0 0 1 86.4 26.1" fill="none" stroke-width="5.4" stroke-linecap="round" opacity="0.78"/>
+<path class="wave" d="M113.6 26.1 A31 31 0 0 1 127.9 40.4" fill="none" stroke-width="5.4" stroke-linecap="round" opacity="0.78"/>
+<path class="wave" d="M60.5 34.7 A44 44 0 0 1 80.7 14.5" fill="none" stroke-width="4.3" stroke-linecap="round" opacity="0.56"/>
+<path class="wave" d="M119.3 14.5 A44 44 0 0 1 139.5 34.7" fill="none" stroke-width="4.3" stroke-linecap="round" opacity="0.56"/>
+<line class="mast" x1="100" y1="58" x2="100" y2="112" stroke-width="5.5" stroke-linecap="round"/>
+<line class="mast" x1="93.5" y1="78" x2="106.5" y2="81" stroke-width="3" stroke-linecap="round"/>
+<line class="mast" x1="93.5" y1="84" x2="106.5" y2="87" stroke-width="3" stroke-linecap="round"/>
+<line class="mast" x1="93.5" y1="90" x2="106.5" y2="93" stroke-width="3" stroke-linecap="round"/>
+<circle cx="100" cy="54" r="6.5" fill="#e2245c"/><circle cx="98" cy="52" r="2" fill="#fff" opacity=".75"/>
+<circle cx="70.0" cy="124" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="66.2" cy="119.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="90.0" cy="124" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="86.2" cy="119.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="110.0" cy="124" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="106.2" cy="119.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="130.0" cy="124" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="126.2" cy="119.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="60.0" cy="141" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="56.2" cy="136.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="80.0" cy="141" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="76.2" cy="136.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="100.0" cy="141" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="96.2" cy="136.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="120.0" cy="141" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="116.2" cy="136.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="140.0" cy="141" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="136.2" cy="136.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="70.0" cy="158" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="66.2" cy="153.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="90.0" cy="158" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="86.2" cy="153.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="110.0" cy="158" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="106.2" cy="153.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="130.0" cy="158" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="126.2" cy="153.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="80.0" cy="175" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="76.2" cy="170.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="100.0" cy="175" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="96.2" cy="170.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="120.0" cy="175" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="116.2" cy="170.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="90.0" cy="192" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="86.2" cy="187.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<circle cx="110.0" cy="192" r="11.6" fill="url(#dr)" stroke="#8a0e35" stroke-width="1.1"/>
+<ellipse cx="106.2" cy="187.4" rx="3.2" ry="2.1" fill="#fff" opacity=".6"/>
+<polygon points="100.0,103.4 104.5,112.7 126.0,109.7 109.0,116.0 126.0,122.3 104.5,119.3 100.0,128.6 95.5,119.3 74.0,122.3 91.0,116.0 74.0,109.7 95.5,112.7" fill="url(#calyx)" stroke="#23763a" stroke-width="1.4" stroke-linejoin="round"/>
+<g transform="translate(0 16)" fill="#fff" stroke="#7d0c30" stroke-width="1.6" paint-order="stroke"><path d="M81 128 Q82 121 90 121 H120 Q122 121 122 124 V127 Q122 129 119 129 H111 V148 Q111 154 116 154 Q118 154 119 152 L121 153 Q119 161 111 161 Q103 161 103 151 V129 H94 Q93 144 90 156 Q89 161 84 161 Q80 161 81 156 Q86 144 86 129 Q83 129 81 131 Z"/></g>
+</g>
+<text x="164" y="150" font-family="Nunito, Quicksand, 'Arial Rounded MT Bold', 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="104" letter-spacing="-2"><tspan class="ink">Rad</tspan><tspan fill="#e2245c">Pi</tspan></text>
+<text class="tag" x="170" y="186" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="17.5" letter-spacing="5">REMOTE RADIO HEAD</text>
+</svg>
