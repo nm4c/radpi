@@ -76,7 +76,8 @@ DEFAULTS = {
         "tail_tone": False,
         "filters": {"emphasis": True, "highpass": True, "lowpass": True},
         "rssi_ms": 500,
-        "rssi_offset_db": -127,     # dBm = RSSI + this (null: show the raw reading instead)
+        "rssi_offset_db": -224,     # dBm = RSSI x rssi_db_per_step + this (null: show the raw reading)
+        "rssi_db_per_step": 2.3,    # measured: about 45 with no signal (-121 dBm), 65 at -75 dBm
     },
     "channel": {
         "count": 16,

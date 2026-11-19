@@ -318,13 +318,23 @@ class Display:
         view = {
             "page": PAGES[self.page], "channel": r.channel, "name": r.channel_name(r.channel),
             "info": tuple(sorted((k, str(v)) for k, v in info.items())), "stepping": r.stepping,
-            "error": r.error, "tx": tx, "busy": busy, "bars": None if rssi is None else min(4, max(0, (rssi - 40) // 15)),
+            "error": r.error, "tx": tx, "busy": busy, "bars": self._bars(r, rssi),
             "operators": tuple(sorted(c.name for c in h._authed())), "heard": heard, "toast": toast,
             "minute": int(time.time() // 60),
         }
         if view["page"] == "system":
             view["sys"] = tuple(sorted(self._system().items()))
         return view
+
+    @staticmethod
+    def _bars(r, rssi):
+        """0-4 signal bars: -120 dBm (nothing) to -75 dBm (strong), or the raw reading if the
+        radio isn't calibrated (about 45 to 65 on an SA818)."""
+        if rssi is None:
+            return None
+        dbm = r.rssi_dbm
+        level = (dbm + 120) / 45 if dbm is not None else (rssi - 45) / 20
+        return min(4, max(0, round(level * 4)))
 
     def _heard(self):
         """(who, text, ago) for the last over the AI agent heard, or (None, None, ago) from the busy

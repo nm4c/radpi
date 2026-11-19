@@ -621,9 +621,11 @@ function freqText(info) {
 // Signal bars (0-4): SA818 RSSI if the radio reports it, otherwise the received audio level.
 function signalBars(m) {
   if (!m) return 0;
-  const level = m.rssi != null
-    ? (m.rssi - 30) / 100 // RSSI 0-255 in 1 dB steps; roughly 30 (quiet) to 130 (strong)
-    : (m.rx_dbfs + 60) / 60; // -60 to 0 dBFS
+  const level = m.rssi_dbm != null
+    ? (m.rssi_dbm + 120) / 45 // -120 dBm (nothing) to -75 dBm (strong)
+    : m.rssi != null
+      ? (m.rssi - 45) / 20 // uncalibrated SA818 reading: about 45 (nothing) to 65 (strong)
+      : (m.rx_dbfs + 60) / 60; // -60 to 0 dBFS
   return Math.max(0, Math.min(4, Math.round(level * 4)));
 }
 

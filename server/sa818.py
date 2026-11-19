@@ -205,6 +205,15 @@ class SA818Radio(Radio):
     def rssi(self):
         return self._rssi
 
+    @property
+    def rssi_dbm(self):
+        """dBm = reading x sa818.rssi_db_per_step + sa818.rssi_offset_db, kept to -127..0 dBm."""
+        off = self.cfg.get("rssi_offset_db")
+        if self._rssi is None or off is None:
+            return None
+        dbm = self._rssi * float(self.cfg.get("rssi_db_per_step") or 1.0) + float(off)
+        return max(-127.0, min(0.0, dbm))
+
     # ---- channels / VFO ---------------------------------------------------
 
     def _next(self, direction):

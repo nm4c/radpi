@@ -124,6 +124,11 @@ class Radio:
         """Latest signal strength reading, or None if the radio can't report one."""
         return None
 
+    @property
+    def rssi_dbm(self):
+        """The reading in dBm, if the radio reports one and it's been calibrated."""
+        return None
+
     # ---- PTT --------------------------------------------------------------
 
     def key(self, owner):

@@ -396,11 +396,11 @@ class MicHead:
         return bool(self.server._busy())
 
     def _bars(self):
-        """Signal bars (1-3) while receiving: the radio's RSSI if it reports one (SA818: about 30
-        quiet to 130 strong, 1 dB a step), else the received audio level."""
-        rssi = self.radio.rssi
-        if rssi is not None:
-            level = (rssi - 30) / 100
+        """Signal bars (1-3) while receiving: from the signal strength in dBm if the radio reports
+        it (-120 dBm none, -75 dBm full), else the received audio level."""
+        dbm = self.radio.rssi_dbm
+        if dbm is not None:
+            level = (dbm + 120) / 45
         else:
             level = (self.server.audio.rx_dbfs + 60) / 60
         return max(1, min(3, round(level * 3)))

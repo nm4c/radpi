@@ -79,9 +79,11 @@ Set `radio.type: sa818` in `config.yaml` (see `config.example.yaml`):
 - At start-up the server wakes the module (PD), sets volume, audio filters and tail tone, then the channel.
   If the module stops answering, operators see the error, PTT is refused, and the server retries every 5 s.
 - `gpio.busy_pin: 23` uses the module's AudioON as the BUSY indicator.
-- RSSI is the module's 0–255 reading in 1 dB steps, shown as dBm = reading + `sa818.rssi_offset_db`
-  (default −127), kept between −127 and 0 dBm. Adjust the offset after checking against a known signal, or set it
-  to `null` to show the raw reading.
+- RSSI is the module's raw reading, shown as dBm = reading × `sa818.rssi_db_per_step` + `sa818.rssi_offset_db`,
+  kept between −127 and 0 dBm. The defaults (2.3 dB a step, −224) come from one module: about 45 with no signal
+  (−121 dBm) and 65 for a −75 dBm signal. To calibrate yours, note the reading with no signal and with a known
+  strong one, then step = (dBm difference) ÷ (reading difference) and offset = dBm − reading × step. Set the
+  offset to `null` to show the raw reading.
 
 Pi set-up, in `/boot/firmware/config.txt`, then reboot:
 
