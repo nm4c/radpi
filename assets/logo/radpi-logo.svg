@@ -1,8 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="30 0 520 210" width="520" height="210" role="img" aria-label="RadPi">
-<style>
-  .ink{fill:#1d2733}.wave{stroke:#00a7c4}.mast{stroke:#2b3542}.tag{fill:#5b6775}
-  @media (prefers-color-scheme: dark){.ink{fill:#eef2f6}.mast{stroke:#dfe6ee}.wave{stroke:#3fd2ea}.tag{fill:#9aa7b4}}
-</style>
+<style>.ink{fill:#1d2733}.mast{stroke:#2b3542}.wave{stroke:#00a7c4}.tag{fill:#5b6775}</style>
 <defs>
   <radialGradient id="dr" cx="36%" cy="30%" r="78%">
     <stop offset="0" stop-color="#ff7aa0"/><stop offset=".5" stop-color="#e2245c"/><stop offset="1" stop-color="#9c103c"/>
@@ -11,7 +8,7 @@
     <stop offset="0" stop-color="#6ddc77"/><stop offset="1" stop-color="#2e9c45"/>
   </linearGradient>
 </defs>
-<g transform="translate(0 0)">
+<g>
 <path class="wave" d="M83.8 46.1 A18 18 0 0 1 92.1 37.8" fill="none" stroke-width="6.5" stroke-linecap="round" opacity="1.00"/>
 <path class="wave" d="M107.9 37.8 A18 18 0 0 1 116.2 46.1" fill="none" stroke-width="6.5" stroke-linecap="round" opacity="1.00"/>
 <path class="wave" d="M72.1 40.4 A31 31 0 0 1 86.4 26.1" fill="none" stroke-width="5.4" stroke-linecap="round" opacity="0.78"/>
@@ -63,5 +60,5 @@
 <g transform="translate(0 16)" fill="#fff" stroke="#7d0c30" stroke-width="1.6" paint-order="stroke"><path d="M81 128 Q82 121 90 121 H120 Q122 121 122 124 V127 Q122 129 119 129 H111 V148 Q111 154 116 154 Q118 154 119 152 L121 153 Q119 161 111 161 Q103 161 103 151 V129 H94 Q93 144 90 156 Q89 161 84 161 Q80 161 81 156 Q86 144 86 129 Q83 129 81 131 Z"/></g>
 </g>
 <text x="164" y="150" font-family="Nunito, Quicksand, 'Arial Rounded MT Bold', 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="104" letter-spacing="-2"><tspan class="ink">Rad</tspan><tspan fill="#e2245c">Pi</tspan></text>
-<text class="tag" x="170" y="186" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="17.5" letter-spacing="5">REMOTE RADIO HEAD</text>
+<text class="tag" x="170.0" y="186.0" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="17.5" letter-spacing="5.0">REMOTE RADIO HEAD</text>
 </svg>

@@ -1,4 +1,9 @@
-# RadPi
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/radpi-logo-dark.svg">
+    <img src="assets/logo/radpi-logo.svg" alt="RadPi" width="440">
+  </picture>
+</h1>
 
 RadPi puts a two-way radio on the web. A Raspberry Pi sits next to a radio, carries its own
 transceiver on a HAT, or takes the place of an Icom radio's network mic, and anyone with a
@@ -684,6 +689,7 @@ server/   main.py (web + WebSocket + safety watchdog), radio.py (PTT, channels, 
 web/      index.html, app.js, worklet.js (AudioWorklet capture/playback), style.css,
           control-head/ (control head SVGs and their input handling, control_head.js)
 assets/control-head/  generators for the control head artwork, plus PNGs and layout JSON
+assets/logo/  the RadPi logo and icons (build_logo.py makes them, and web/icons/)
 deploy/   install.sh, systemd unit
 docs/     HARDWARE.md (hand-wired interface), voice/ (training an Australian Piper voice), images/ (screenshots)
 pihat/       Pi HAT for an external radio: KiCad project, schematic reference, JLC BoM
