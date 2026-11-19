@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// RadPi HATs (Control HAT and SA818 HAT): TLV320AIC3104 codec as an ALSA sound card called "RadPi".
+//
+//   codec      I2C1 (GPIO2/3) at 0x18, reset on GPIO26 (active low, held low by a pull-down)
+//   clocks     a 12 MHz oscillator drives the codec's MCLK; the codec is the I2S clock master
+//              (BCLK/WCLK from its PLL), so the audio stays locked to that oscillator and the
+//              Pi's I2S (GPIO18-21) follows
+//
+// Build and install on the Pi:
+//   dtc -@ -I dts -O dtb -o radpi-codec.dtbo deploy/overlays/radpi-codec.dts
+//   sudo cp radpi-codec.dtbo /boot/firmware/overlays/
+// then in /boot/firmware/config.txt:   dtparam=i2c_arm=on   dtparam=i2s=on   dtoverlay=radpi-codec
+// and reboot. `aplay -l` should list card "RadPi".
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&i2s_clk_consumer>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	fragment@1 {
+		target = <&i2c1>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			radpi_codec: tlv320aic3104@18 {
+				compatible = "ti,tlv320aic3104";
+				reg = <0x18>;
+				#sound-dai-cells = <0>;
+				reset-gpios = <&gpio 26 1>;	/* GPIO_ACTIVE_LOW */
+				status = "okay";
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&sound>;
+		__overlay__ {
+			compatible = "simple-audio-card";
+			simple-audio-card,name = "RadPi";
+			simple-audio-card,format = "i2s";
+			simple-audio-card,bitclock-master = <&codec_dai>;
+			simple-audio-card,frame-master = <&codec_dai>;
+			status = "okay";
+
+			simple-audio-card,cpu {
+				sound-dai = <&i2s_clk_consumer>;
+			};
+			codec_dai: simple-audio-card,codec {
+				sound-dai = <&radpi_codec>;
+				system-clock-frequency = <12000000>;
+			};
+		};
+	};
+};
