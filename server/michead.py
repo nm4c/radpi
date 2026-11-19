@@ -27,7 +27,8 @@ import time
 import numpy as np
 
 from .audio import Decimator, Interpolator
-from .icom_ipmic import AUDIO_RX, AUDIO_TX, DEFAULT_ICONS, FRAME, KEYS, RATE, MicLink, frame
+from .icom_ipmic import (AUDIO_RX, AUDIO_TX, DEFAULT_ICONS, FRAME, KEYS, RATE, SIGNAL_BARS, MicLink,
+                         frame)
 
 log = logging.getLogger("michead")
 
@@ -39,7 +40,6 @@ FLASH_S = 1.5             # a message (volume, "NO TX") stays on the screen this
 ENTRY_TIMEOUT_S = 4.0     # a half-typed channel number is forgotten after this
 BACKLIGHT_S = 10.0        # the radio turns the backlight off about 10 s after the last key
 HOLD_TICK_S = 0.25        # PTT keepalive for RadPi's watchdog while the mic's PTT is held
-BUSY_ICON = 0x40          # display byte 56: busy (squelch open)
 
 
 def check_action(a):
@@ -395,6 +395,16 @@ class MicHead:
             return bool(self.radio.link and self.radio.mic.flags & 0x01)
         return bool(self.server._busy())
 
+    def _bars(self):
+        """Signal bars (1-3) while receiving: the radio's RSSI if it reports one (SA818: about 30
+        quiet to 130 strong, 1 dB a step), else the received audio level."""
+        rssi = self.radio.rssi
+        if rssi is not None:
+            level = (rssi - 30) / 100
+        else:
+            level = (self.server.audio.rx_dbfs + 60) / 60
+        return max(1, min(3, round(level * 3)))
+
     def _vol_gain(self):
         return 0.0 if self.volume <= 0 else 10 ** ((self.volume - 6) * 3 / 20)
 
@@ -441,7 +451,8 @@ class MicHead:
             text = r.channel_name(r.channel)
         icons = bytearray(DEFAULT_ICONS)
         if busy:
-            icons[56 - 8] |= BUSY_ICON
+            for bit in SIGNAL_BARS[:self._bars()]:
+                icons[56 - 8] |= bit
         led = (r.ptt_owner is not None, busy and r.ptt_owner is None)
         light = now < self._light_until
         tx = r.ptt_owner == self.op.id and self._ptt_held

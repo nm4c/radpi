@@ -50,7 +50,8 @@ LED_RED = 0x02                 # transmitting
 LED_GREEN = 0x04               # busy / squelch open
 
 DISPLAY_LEN = 68               # 02 0a payload: 8 characters + icon bytes
-DEFAULT_ICONS = bytes(48) + b"\x80"   # payload byte 56 = 0x80 in nearly every captured screen
+DEFAULT_ICONS = bytes(48) + b"\x80"   # payload byte 56 = 0x80: the signal icon, no bars
+SIGNAL_BARS = (0x40, 0x20, 0x10)       # byte 56: signal bars 1-3, filling up while receiving
 
 # what the real mic sends after 05 01: "Icom Inc", then its MAC address (00:90:c7 is Icom's)
 # and two bytes not yet known. The radio doesn't check the MAC; this one is made up.
@@ -162,7 +163,8 @@ def display_flags(data):
     `raw` keeps the rest (hex) for working out more."""
     b = bytes(data) + bytes(max(0, 62 - len(data)))
     return {
-        "busy": bool(b[56] & 0x40),          # squelch open (the radio also lights the green LED)
+        "busy": bool(b[56] & 0x40),          # at least one signal bar: receiving
+        "bars": sum(1 for bit in SIGNAL_BARS if b[56] & bit),
         "shift": bool(b[58] & 0x80),
         "talkaround": bool(b[58] & 0x40),
         "scan": bool(b[58] & 0x20),

@@ -644,7 +644,11 @@ function updateHead() {
   if (p.active) status.push(p.mine ? `TX ${totText()}` : "TX");
   else if (st.stepping) status.push("CHG");
   else if (m && m.busy) status.push("BUSY");
-  if (m && m.rssi_dbm != null && !p.active) status.push(`${Math.round(m.rssi_dbm)} dBm`);
+  if (m && !p.active) {
+    // dBm once sa818.rssi_offset_db is calibrated, the module's raw reading (1 dB steps) until then
+    if (m.rssi_dbm != null) status.push(`${Math.round(m.rssi_dbm)} dBm`);
+    else if (m.rssi != null) status.push(`RSSI ${m.rssi}`);
+  }
   if (st.info && st.info.low_power) status.push("LOW");
   if (st.recording) status.unshift("REC");
   if (st.fx) status.unshift("FX");

@@ -61,7 +61,7 @@ The functions are this radio's programming. Typing three digits jumps straight t
 
 | Frame | Meaning |
 |---|---|
-| `02 07 [02]`, `02 0a [68]`, `02 08 [00 44]` | Display update. In `02 0a`, bytes 0–7 are the text; a set top bit means "this character followed by a decimal point" (`b4` = "4."). The bytes after the text are icon flags (shift, talkaround, scan, busy). |
+| `02 07 [02]`, `02 0a [68]`, `02 08 [00 44]` | Display update. In `02 0a`, bytes 0–7 are the text; a set top bit means "this character followed by a decimal point" (`b4` = "4."). The bytes after the text are icon flags: byte 56 is the signal meter (`80` the icon, then `40`, `20`, `10` for bars 1-3, filling up while receiving), and bytes 57, 58 and 61 hold shift, talkaround and scan. |
 | `02 02 [x]` | LED: `02` red (transmitting), `04` green (busy or squelch open), `06` both |
 | `01 04 [f 00 00 00]` | Audio routing: `01` = radio is sending speaker audio, `08` = radio is transmitting and wants mic audio |
 | `02 0b [x]` | Backlight: `02` on (any key), `00` off about 10 s later |
