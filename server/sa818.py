@@ -320,7 +320,7 @@ class SA818Radio(Radio):
         if self._link is None:
             self._link = _MockLink() if self.backend == "mock" else _SerialLink(s["port"], int(s["baud"]))
         self._pd.on()
-        await asyncio.sleep(0.5)  # module start-up
+        await asyncio.sleep(1.5)  # module start-up: commands sent sooner can be half taken
         for _ in range(3):
             if await self._cmd("AT+DMOCONNECT", "+DMOCONNECT:") == "+DMOCONNECT:0":
                 break
@@ -341,6 +341,10 @@ class SA818Radio(Radio):
                 log.warning("%s -> %s", cmd, reply or "no reply")
         self._ready = True
         self.active = None
+        await self._apply()
+        # Some modules don't start receiving on the channel set straight after power-up (they only
+        # hear after it's set again): set it once more after they've settled.
+        await asyncio.sleep(1.0)
         await self._apply()
         log.info("SA818 ready (%s)", self.version or "version unknown")
 
