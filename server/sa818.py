@@ -23,6 +23,9 @@ from .radio import Radio, RadioError, gpio_output
 
 log = logging.getLogger("sa818")
 
+SETTLE_S = 1.0     # after a channel/tone change: time the module gets before anything else is sent
+RESEND_S = 0.4     # then the change is sent again this long after the first
+
 # The module's CTCSS codes 0001-0038, in order.
 CTCSS = [67.0, 71.9, 74.4, 77.0, 79.7, 82.5, 85.4, 88.5, 91.5, 94.8, 97.4, 100.0, 103.5, 107.2,
          110.9, 114.8, 118.8, 123.0, 127.3, 131.8, 136.5, 141.3, 146.2, 151.4, 156.7, 162.2, 167.9,
@@ -116,6 +119,7 @@ class SA818Radio(Radio):
         self._link = None
         self._io = asyncio.Lock()   # one serial command at a time
         self._rssi = None
+        self._quiet_until = 0.0     # no RSSI polling until then: the module is applying a change
         self._ready = False
         self.version = None
         self.error = "Radio module starting"
@@ -302,9 +306,19 @@ class SA818Radio(Radio):
         cmd = "AT+DMOSETGROUP={},{:.4f},{:.4f},{},{},{}".format(
             1 if ch["bandwidth"] == "wide" else 0, ch["tx_freq"], ch["freq"],
             tone_code(ch["tx_tone"]), ch["squelch"], tone_code(ch["rx_tone"]))
+        # The module answers straight away but takes a moment to apply a new channel and its tones,
+        # and anything sent meanwhile (even RSSI?) can make it drop part of the change (a tone that
+        # doesn't set, or the last channel's tone sticking). So: no RSSI polling for a second, and
+        # the setting sent twice.
+        self._quiet_until = time.monotonic() + SETTLE_S
         reply = await self._cmd(cmd, "+DMOSETGROUP:")
         if reply != "+DMOSETGROUP:0":
             raise RadioError(f"Module refused the settings ({reply or 'no reply'})")
+        await asyncio.sleep(RESEND_S)
+        reply = await self._cmd(cmd, "+DMOSETGROUP:")
+        if reply != "+DMOSETGROUP:0":
+            log.warning("%s (again) -> %s", cmd, reply or "no reply")
+        self._quiet_until = time.monotonic() + SETTLE_S
         (self._low.on if ch["low_power"] else self._low.off)()
         self.active = ch
         log.info("tuned: %s rx %.4f tx %.4f", ch["name"], ch["freq"], ch["tx_freq"])
@@ -360,7 +374,8 @@ class SA818Radio(Radio):
                         await self._connect()
                     self.error = None
                     self._changed()
-                if poll and self.ptt_owner is None and not self.stepping:
+                if (poll and self.ptt_owner is None and not self.stepping
+                        and time.monotonic() >= self._quiet_until):
                     reply = await self._cmd("RSSI?", "RSSI=", timeout=0.5)
                     if reply:
                         self._rssi = int(reply.split("=", 1)[1])
