@@ -345,8 +345,10 @@ class SA818Radio(Radio):
         log.info("SA818 ready (%s)", self.version or "version unknown")
 
     async def run(self):
-        """Bring the module up, keep it set, and poll RSSI while receiving."""
-        period = max(0.2, self.cfg["rssi_ms"] / 1000)
+        """Bring the module up, keep it set, and poll RSSI while receiving (sa818.rssi_ms; 0 = off)."""
+        poll = float(self.cfg["rssi_ms"]) > 0
+        period = max(0.2, float(self.cfg["rssi_ms"]) / 1000) if poll else 1.0
+        misses = 0
         while True:
             try:
                 if not self._ready:
@@ -354,10 +356,16 @@ class SA818Radio(Radio):
                         await self._connect()
                     self.error = None
                     self._changed()
-                if self.ptt_owner is None and not self.stepping:
+                if poll and self.ptt_owner is None and not self.stepping:
                     reply = await self._cmd("RSSI?", "RSSI=", timeout=0.5)
                     if reply:
                         self._rssi = int(reply.split("=", 1)[1])
+                        misses = 0
+                    else:
+                        misses += 1
+                        if misses == 3:   # don't keep showing an old reading
+                            log.warning("RSSI? not answered 3 times in a row: the serial link is losing replies")
+                            self._rssi = None
                 await asyncio.sleep(period)
             except asyncio.CancelledError:
                 raise

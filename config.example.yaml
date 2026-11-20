@@ -219,7 +219,7 @@ sa818:
     emphasis: true
     highpass: true
     lowpass: true
-  rssi_ms: 500          # how often to read signal strength while receiving
+  rssi_ms: 500          # how often to read signal strength (0 = never)
   rssi_offset_db: -224  # dBm = RSSI x rssi_db_per_step + offset, shown from -127 to 0 dBm
   rssi_db_per_step: 2.3 #   (measured: ~45 with no signal = -121 dBm, ~65 = -75 dBm; null offset = raw)
 
