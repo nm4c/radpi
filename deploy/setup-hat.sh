@@ -228,10 +228,12 @@ for u in "${SOUND_SERVERS[@]}"; do
 done
 # Masking stops them starting, not the copies already running in logged-in sessions (whose
 # sockets would start them straight back up): stop them in every user's service manager too.
+# Sockets first (so nothing restarts them), without waiting: stopping PipeWire itself can hang.
 for user in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $2}'); do
-  systemctl --user --machine="$user@" stop "${SOUND_SERVERS[@]}" >/dev/null 2>&1 || true
+  timeout 10 systemctl --user --machine="$user@" stop --no-block "${SOUND_SERVERS[@]}" >/dev/null 2>&1 || true
 done
-for p in wireplumber pipewire-pulse pipewire pulseaudio; do pkill -x "$p" 2>/dev/null || true; done
+sleep 1
+for p in wireplumber pipewire-pulse pipewire pulseaudio; do pkill -9 -x "$p" 2>/dev/null || true; done
 if (( masked )); then
   echo "   desktop sound servers (PipeWire, WirePlumber, PulseAudio) switched off for all users"
   # put back the levels they changed (saved ones; the routing step below sets them the first time)
