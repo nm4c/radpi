@@ -337,10 +337,46 @@ def _merge(base, over):
     return out
 
 
+# Plain-English hints for the YAML mistakes people actually make in config.yaml.
+_YAML_HINTS = (
+    ("<block sequence start>", "a list item (- ...) where a setting was expected: check its indentation, "
+                               "and that the setting above it isn't already given a value (a leftover [] or {})"),
+    ("mapping values are not allowed", "a ':' YAML didn't expect: check the indentation, or put the value in quotes"),
+    ("could not find expected ':'", "a line without 'name: value': a missing space after ':', or a stray word"),
+    ("found character '\\t'", "a tab: indent with spaces only"),
+    ("found undefined alias", "a value starting with '*': put it in quotes"),
+    ("expected <block end>", "the indentation doesn't line up with the lines around it"),
+)
+
+
+def _yaml_error(path, e):
+    """One readable line for a YAML mistake, instead of a parser traceback."""
+    mark = getattr(e, "problem_mark", None)
+    raw = f"{getattr(e, 'problem', '') or ''} {getattr(e, 'context', '') or ''} {e}"
+    hint = next((h for key, h in _YAML_HINTS if key in raw), (getattr(e, "problem", None) or str(e)).strip())
+    if mark is None:
+        return f"config: {path}: {hint}"
+    try:
+        line = path.read_text().splitlines()[mark.line]
+    except (OSError, IndexError):
+        line = ""
+    return f"config: {path} line {mark.line + 1}: {hint}\n    {mark.line + 1} | {line}"
+
+
 def load(path):
     path = Path(path)
-    with path.open() as f:
-        cfg = _merge(DEFAULTS, yaml.safe_load(f) or {})
+    try:
+        with path.open() as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        raise SystemExit(f"config: {path} doesn't exist (copy config.example.yaml to start one)") from None
+    except PermissionError:
+        raise SystemExit(f"config: can't read {path}: run with sudo (it's readable by the service user only)") from None
+    except yaml.YAMLError as e:
+        raise SystemExit(_yaml_error(path, e)) from None
+    if not isinstance(data, dict):
+        raise SystemExit(f"config: {path} should be a list of settings (name: value), not {type(data).__name__}")
+    cfg = _merge(DEFAULTS, data)
 
     srv = cfg["server"]
     if not 1 <= float(srv["session_days"]) <= 365:
