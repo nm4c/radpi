@@ -559,7 +559,9 @@ sudo tailscale serve --bg 8080
 ```
 
 Then open `https://<pi-name>.<your-tailnet>.ts.net` on any device in your tailnet.
-You can also set `server.tls_cert` / `tls_key` to your own certificate.
+You can also set `server.tls_cert` / `tls_key` to your own certificate. For a free, browser-trusted one
+from Let's Encrypt on a name in a Cloudflare-hosted domain, `sudo ./deploy/cert-cloudflare.sh radpi.example.com`
+gets it with a DNS challenge (no open ports needed), renews it automatically, and prints the two lines to add.
 
 ### Using an iPhone
 
@@ -695,7 +697,7 @@ web/      index.html, app.js, worklet.js (AudioWorklet capture/playback), style.
           control-head/ (control head SVGs and their input handling, control_head.js)
 assets/control-head/  generators for the control head artwork, plus PNGs and layout JSON
 assets/logo/  the RadPi logo and icons (build_logo.py makes them, and web/icons/)
-deploy/   install.sh, update.sh, setup-hat.sh (RadPi HAT set-up and --check), radpi-mixer.sh, overlays/, systemd units
+deploy/   install.sh, update.sh, setup-hat.sh (RadPi HAT set-up and --check), radpi-mixer.sh, cert-cloudflare.sh (Let's Encrypt), overlays/, systemd units
 docs/     HARDWARE.md (hand-wired interface), voice/ (training an Australian Piper voice), images/ (screenshots)
 pihat/       Pi HAT for an external radio: KiCad project, schematic reference, JLC BoM
 sa818s-hat/  Pi HAT with a built-in SA818S 1 W UHF transceiver (no external radio)
