@@ -17,6 +17,8 @@ import numpy as np
 
 log = logging.getLogger("audio")
 
+HAT_CARD = "RadPi"   # the RadPi HATs' codec, as the radpi-codec overlay names it
+
 
 # ---- resampling -----------------------------------------------------------
 
@@ -210,24 +212,41 @@ class SoundDeviceAudio:
         self._streams = []
 
     @staticmethod
-    def _device(spec):
-        if spec is None or isinstance(spec, int):
+    def _device(spec, hat):
+        if spec is None:
+            return hat     # the RadPi HAT's codec if it's there, else the system default
+        if isinstance(spec, int):
             return spec
         return str(spec)  # sounddevice matches name substrings
 
     def start(self):
         import sounddevice as sd
 
+        # Not set in config.yaml: use the RadPi HATs' sound card ("RadPi", from the radpi-codec
+        # overlay) when there is one.
+        try:
+            hat = next((HAT_CARD for d in sd.query_devices() if HAT_CARD in d["name"]), None)
+        except Exception:
+            hat = None
+        dev_in = self._device(self.a["input_device"], hat)
+        dev_out = self._device(self.a["output_device"], hat)
         common = dict(samplerate=self.dev_rate, channels=1, dtype="float32",
                       blocksize=self.dev_block, latency="low")
-        self._streams = [
-            sd.InputStream(device=self._device(self.a["input_device"]), callback=self._in_cb, **common),
-            sd.OutputStream(device=self._device(self.a["output_device"]), callback=self._out_cb, **common),
-        ]
-        for s in self._streams:
-            s.start()
-        log.info("audio started: in=%s out=%s @ %d Hz", self.a["input_device"] or "default",
-                 self.a["output_device"] or "default", self.dev_rate)
+        try:
+            self._streams = [
+                sd.InputStream(device=dev_in, callback=self._in_cb, **common),
+                sd.OutputStream(device=dev_out, callback=self._out_cb, **common),
+            ]
+            for s in self._streams:
+                s.start()
+        except Exception as e:
+            from . import pi
+            log.error("Can't open the sound card (in=%s, out=%s): %s", dev_in or "default", dev_out or "default", e)
+            log.error("No sound card? %s. Otherwise set audio.input_device / output_device in config.yaml "
+                      "(list them: /opt/radpi/.venv/bin/python -m sounddevice)", pi.SETUP_HINT)
+            raise SystemExit(f"audio: can't open the sound card: {e}") from None
+        log.info("audio started: in=%s out=%s @ %d Hz", dev_in or "default", dev_out or "default",
+                 self.dev_rate)
 
     def stop(self):
         for s in self._streams:

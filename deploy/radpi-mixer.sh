@@ -5,12 +5,21 @@
 #
 #   sudo deploy/radpi-mixer.sh sa818      RadPi SA818 HAT: TX on HPLOUT only (single-ended)
 #   sudo deploy/radpi-mixer.sh control    RadPi Control HAT: TX on HPLOUT + HPLCOM (differential, into T1)
+#   radpi-mixer --firstboot               run once at boot by radpi-mixer.service (deploy/setup-hat.sh
+#                                         sets it up): the HAT from /etc/radpi-hat
 #
 # Receive audio comes in on LINE1L (pins 10/11, RX_P/RX_N) on both HATs.
 # Levels after this: everything at 0 dB. Set the on-air levels with audio.rx_gain / audio.tx_gain in
 # config.yaml, or adjust here: 'PGA' (capture, 0 to 59.5 dB) and 'HP' (output, 0 to 9 dB).
 set -euo pipefail
 
+firstboot=0
+if [[ "${1:-}" == --firstboot ]]; then
+  firstboot=1
+  set -- "$(cat /etc/radpi-hat 2>/dev/null || true)"
+  # the codec's driver can still be loading this early in boot
+  for _ in $(seq 30); do aplay -l 2>/dev/null | grep -q "\[RadPi\]" && break; sleep 1; done
+fi
 hat="${1:-}"
 if [[ "$hat" != "sa818" && "$hat" != "control" ]]; then
   echo "usage: sudo $0 sa818|control"; exit 1
@@ -57,4 +66,7 @@ m Line mute
 
 alsactl store "$card"
 echo "Codec set up for the $hat HAT and saved."
+if (( firstboot )); then
+  mkdir -p /var/lib/radpi && touch /var/lib/radpi/mixer-done
+fi
 [[ $failed == 0 ]] || echo "Some settings didn't apply (above): compare with 'amixer -c RadPi scontrols'."

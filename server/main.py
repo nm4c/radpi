@@ -1300,6 +1300,17 @@ def main():
         ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_ctx.load_cert_chain(s["tls_cert"], s["tls_key"])
 
-    web.run_app(build_app(cfg), host=s["host"], port=int(s["port"]), ssl_context=ssl_ctx,
-                print=lambda *_: log.info("listening on %s://%s:%s",
-                                          "https" if ssl_ctx else "http", s["host"], s["port"]))
+    try:
+        web.run_app(build_app(cfg), host=s["host"], port=int(s["port"]), ssl_context=ssl_ctx,
+                    print=lambda *_: log.info("listening on %s://%s:%s",
+                                              "https" if ssl_ctx else "http", s["host"], s["port"]))
+    except PermissionError as e:
+        if int(s["port"]) < 1024:
+            log.error("Can't use port %s: ports below 1024 need permission. Use server.port 8080 (or 8443), "
+                      "or give the service that permission:  sudo systemctl edit radpi  and add the two lines "
+                      "[Service] / AmbientCapabilities=CAP_NET_BIND_SERVICE", s["port"])
+        raise SystemExit(f"server: {e}") from None
+    except OSError as e:
+        if e.errno == 98:
+            log.error("Port %s is already in use (is another copy of RadPi running?)", s["port"])
+        raise

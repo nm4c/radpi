@@ -82,7 +82,7 @@ audio:
   # sounddevice = real sound card, mock = test tone generator (development)
   backend: sounddevice
   # Device name substring (see `python -m sounddevice`) or index. null = system default.
-  input_device: null
+  input_device: null      # null = the RadPi HATs' sound card if there is one, else the system default
   output_device: null
   device_rate: 48000   # sound card rate; must be an integer multiple of wire_rate
   wire_rate: 16000     # rate sent over the network
@@ -198,14 +198,12 @@ webrtc:
   tx_max_ms: 200         # if more than this piles up, the oldest audio is dropped to catch up
 
 # ---- RadPi SA818 HAT (radio.type: sa818) ---------------------------------------------------
-# On the HAT: PTT = GPIO17 (gpio.ptt_pin, active_high true), busy = the module's AudioON on GPIO23,
-# so set gpio.busy_pin: 23 and busy_pull_up: true. gpio.up_pin/down_pin aren't used.
-# The module is on the UART on GPIO14/15. Pi 4: Bluetooth normally has it, so add  dtoverlay=disable-bt
-# to /boot/firmware/config.txt and turn off the serial console (sudo raspi-config > Interface > Serial:
-# login shell No, hardware Yes); the port is /dev/serial0. Pi 5: add  dtparam=uart0=on  and use
-# port: /dev/ttyAMA0 (on a Pi 5, /dev/serial0 is the separate 3-pin debug connector).
+# Set the Pi up first:  sudo ./deploy/setup-hat.sh sa818  (serial port and sound card, Pi 4 or 5),
+# reboot, and check with  sudo ./deploy/setup-hat.sh --check
+# On the HAT: PTT = GPIO17 (gpio.ptt_pin, active_high true), busy = the module's AudioON on GPIO23
+# (used unless gpio.busy_pin says otherwise). gpio.up_pin/down_pin aren't used.
 sa818:
-  port: /dev/serial0
+  port: auto            # the UART on GPIO14/15: auto = /dev/ttyAMA0 on a Pi 5, /dev/serial0 on others
   baud: 9600
   pd_pin: 27            # module power-down: high = on (the HAT holds it low until the server starts)
   low_power_pin: 22     # high = 0.5 W, low = 1 W

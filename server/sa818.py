@@ -19,6 +19,7 @@ import random
 import re
 import time
 
+from . import pi
 from .radio import Radio, RadioError, gpio_output
 
 log = logging.getLogger("sa818")
@@ -114,6 +115,8 @@ class SA818Radio(Radio):
         self._pd = gpio_output(self.backend, s["pd_pin"], True, "SA818 PD")
         self._low = gpio_output(self.backend, s["low_power_pin"], True, "SA818 LOW POWER")
         self._link = None
+        self.port = s["port"] if s["port"] not in (None, "", "auto") else pi.sa818_port()
+        self._hinted = False
         self._io = asyncio.Lock()   # one serial command at a time
         self._rssi = None
         self._ready = False
@@ -318,14 +321,18 @@ class SA818Radio(Radio):
     async def _connect(self):
         s = self.cfg
         if self._link is None:
-            self._link = _MockLink() if self.backend == "mock" else _SerialLink(s["port"], int(s["baud"]))
+            self._link = _MockLink() if self.backend == "mock" else _SerialLink(self.port, int(s["baud"]))
         self._pd.on()
         await asyncio.sleep(1.5)  # module start-up: commands sent sooner can be half taken
         for _ in range(3):
             if await self._cmd("AT+DMOCONNECT", "+DMOCONNECT:") == "+DMOCONNECT:0":
                 break
         else:
-            raise RadioError(f"No answer from the SA818 on {s['port']}")
+            if not self._hinted:
+                self._hinted = True
+                log.error("No answer from the SA818 on %s. Usually the serial port isn't set up (a serial "
+                          "console or login on it, or Bluetooth on the Pi 4): %s", self.port, pi.SETUP_HINT)
+            raise RadioError(f"No answer from the SA818 on {self.port}")
         reply = await self._cmd("AT+VERSION", "+VERSION:")
         self.version = reply.split(":", 1)[1].strip() if reply else None
         f = s["filters"]

@@ -32,15 +32,22 @@ and net names are searchable). Labels with the same name are connected. Regenera
 
 ## Software
 
-The codec uses the `tlv320aic3x` driver already in Raspberry Pi OS, with a small custom overlay
-(still to write): `simple-audio-card` with the codec at I2C 0x18, `reset-gpios` on GPIO26 (active
-low) and a fixed 12 MHz system clock. `simple-audio-card` always clocks the codec from MCLK, which
-is where Y1's 12 MHz goes on this board. Don't use the stock `dacberry400` overlay: its driver
-clocks the codec's PLL from BCLK while telling it the clock is 12 MHz, so the sample rate would be
-wrong here. In ALSA, set the HPLCOM output to "differential of HPLOUT" so T1 is driven
-differentially. After that the remote-head server sees an ordinary ALSA sound card: set
-`audio.input_device` / `output_device` in `config.yaml` to its name, and `gpio.busy_pin: 23` with
-`busy_pull_up: true`.
+**Pi set-up (Pi 4 or Pi 5):** from the git clone,
+
+```
+sudo ./deploy/setup-hat.sh control
+sudo reboot
+sudo ./deploy/setup-hat.sh --check
+```
+
+(or `sudo ./deploy/install.sh --hat control` on a new install). It installs the codec overlay
+(`deploy/overlays/radpi-codec.dts`: the `tlv320aic3x` driver already in Raspberry Pi OS, codec at
+I2C 0x18, reset on GPIO26, clocked from Y1's 12 MHz and driving the I2S clocks), and at the next boot
+sets the codec's inputs and outputs (`deploy/radpi-mixer.sh control`: LINE1L in, HPLOUT and HPLCOM
+differential into T1). The server finds the sound card ("RadPi") by itself. In `config.yaml`:
+`radio.type: buttons`, the channels, and `gpio.busy_pin: 23` with `busy_pull_up: true` if the
+radio's busy line is wired to BS+/BS-. Don't use the stock `dacberry400` overlay: its driver clocks
+the codec's PLL from BCLK while telling it the clock is 12 MHz, so the sample rate would be wrong.
 
 **Powering:** the HAT powers the Pi through header pins 2 and 4. Don't power the Pi from its USB-C
 socket while the HAT is fitted and its 13.8 V input is off: the Pi's 5 V would then sit on the

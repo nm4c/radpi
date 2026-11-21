@@ -125,6 +125,14 @@ if (( unit_changed )); then
   systemctl enable --quiet radpi
 fi
 
+# Set up for a RadPi HAT (deploy/setup-hat.sh): keep that up to date too (a changed overlay, the
+# mixer script). It only rewrites what differs, keeps the codec levels, and says if a reboot is needed.
+if [[ -f /etc/radpi-hat ]]; then
+  echo "== RadPi $(cat /etc/radpi-hat) HAT set-up"
+  "$SRC/deploy/setup-hat.sh" "$(cat /etc/radpi-hat)" \
+    || echo "   the HAT set-up hit a problem (above): sudo ./deploy/setup-hat.sh --check"
+fi
+
 echo "== restarting radpi"
 systemctl restart radpi
 sleep 2

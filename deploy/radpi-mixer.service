@@ -1,0 +1,13 @@
+[Unit]
+Description=RadPi HAT: set up the codec's inputs and outputs (once, after deploy/setup-hat.sh)
+After=sound.target alsa-restore.service
+Before=radpi.service
+ConditionPathExists=/etc/radpi-hat
+ConditionPathExists=!/var/lib/radpi/mixer-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/radpi-mixer --firstboot
+
+[Install]
+WantedBy=multi-user.target

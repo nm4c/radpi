@@ -510,11 +510,15 @@ one its own `local` address or NAT rule.
 
 1. Build the interface: see **[docs/HARDWARE.md](docs/HARDWARE.md)**. It has generic wiring plus IC-F621 notes.
    Or use the **[RadPi Control HAT](pihat/)**, a Pi HAT with the interface, sound card and power supply on one board.
-2. Copy this folder to the Pi and run:
+2. Clone this repository on the Pi and run:
    ```bash
-   sudo ./deploy/install.sh            # or --with-ai to include the optional AI agent
+   sudo ./deploy/install.sh            # add --hat control or --hat sa818 with a RadPi HAT,
+                                       #   and --with-ai to include the optional AI agent
    sudo nano /opt/radpi/config.yaml
    ```
+   With a RadPi HAT, `--hat` (or `sudo ./deploy/setup-hat.sh control|sa818` later) sets the Pi up for
+   it, Pi 4 or Pi 5: the codec as sound card "RadPi" and, for the SA818 HAT, the serial port. Reboot
+   once, then `sudo ./deploy/setup-hat.sh --check` says whether everything is in place.
    Set `radio.type`, the channels (`channel.count` / `names` for an external radio,
    `channel.list` for the RadPi SA818 HAT; that board also needs the UART set up, see the `sa818:` section), and the sound card
    (`input_device` / `output_device`, for example `"USB Audio"`. List them with
@@ -691,7 +695,7 @@ web/      index.html, app.js, worklet.js (AudioWorklet capture/playback), style.
           control-head/ (control head SVGs and their input handling, control_head.js)
 assets/control-head/  generators for the control head artwork, plus PNGs and layout JSON
 assets/logo/  the RadPi logo and icons (build_logo.py makes them, and web/icons/)
-deploy/   install.sh, systemd unit
+deploy/   install.sh, update.sh, setup-hat.sh (RadPi HAT set-up and --check), radpi-mixer.sh, overlays/, systemd units
 docs/     HARDWARE.md (hand-wired interface), voice/ (training an Australian Piper voice), images/ (screenshots)
 pihat/       Pi HAT for an external radio: KiCad project, schematic reference, JLC BoM
 sa818s-hat/  Pi HAT with a built-in SA818S 1 W UHF transceiver (no external radio)

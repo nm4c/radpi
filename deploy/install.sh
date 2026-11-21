@@ -2,6 +2,8 @@
 # Install the remote head on Raspberry Pi OS (Bookworm or later).
 # Run from the project directory:  sudo ./deploy/install.sh
 #                                  sudo ./deploy/install.sh --with-ai   (also the AI agent's packages)
+#                                  sudo ./deploy/install.sh --hat sa818 (or control: also set the Pi up
+#                                       for a RadPi HAT, see deploy/setup-hat.sh)
 #
 # The AI agent (bot: in config.yaml) needs Whisper, a speaker model and Piper, which pull in
 # PyTorch: well over a gigabyte. They're only installed with --with-ai, and update.sh keeps
@@ -13,11 +15,15 @@ SRC="$(cd "$(dirname "$0")/.." && pwd)"
 AI_MARK="$DEST/.with-ai"   # present = this install has the AI agent's packages
 
 with_ai=0
-for arg in "$@"; do
-  case "$arg" in
+hat=""
+while (( $# )); do
+  case "$1" in
     --with-ai) with_ai=1 ;;
-    *) echo "unknown option: $arg  (use --with-ai to include the AI agent)"; exit 1 ;;
+    --hat) hat="${2:-}"; shift
+           [[ $hat == control || $hat == sa818 ]] || { echo "--hat control or --hat sa818"; exit 1; } ;;
+    *) echo "unknown option: $1  (--with-ai, --hat control|sa818)"; exit 1 ;;
   esac
+  shift
 done
 
 if [[ $EUID -ne 0 ]]; then echo "run with sudo"; exit 1; fi
@@ -49,6 +55,11 @@ install -m 755 "$SRC/deploy/radpi-users" /usr/local/bin/radpi-users
 cp "$SRC/deploy/radpi.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable radpi
+
+if [[ -n $hat ]]; then
+  echo "== setting the Pi up for the RadPi $hat HAT"
+  "$SRC/deploy/setup-hat.sh" "$hat"
+fi
 
 echo
 echo "Installed. Next:"

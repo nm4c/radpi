@@ -64,7 +64,7 @@ DEFAULTS = {
         "mic_rtp_port": 50000,
     },
     "sa818": {
-        "port": "/dev/serial0",
+        "port": "auto",             # auto = the UART on GPIO14/15: /dev/ttyAMA0 on a Pi 5, else /dev/serial0
         "baud": 9600,
         "pd_pin": 27,
         "low_power_pin": 22,
@@ -393,6 +393,8 @@ def load(path):
         raise SystemExit("config: channel.count must be >= 1")
     if kind == "sa818":
         g, s = cfg["gpio"], cfg["sa818"]
+        if g["busy_pin"] is None:          # the HAT's busy line: the module's AudioON on GPIO23
+            g["busy_pin"], g["busy_pull_up"] = 23, True
         clash = {g["ptt_pin"], g["busy_pin"]} & {s["pd_pin"], s["low_power_pin"]}
         if clash:
             raise SystemExit(f"config: GPIO {sorted(clash)} used twice (gpio vs sa818 pins)")

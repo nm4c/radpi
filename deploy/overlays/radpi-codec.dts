@@ -7,7 +7,7 @@
 //              (BCLK/WCLK from its PLL), so the audio stays locked to that oscillator and the
 //              Pi's I2S (GPIO18-21) follows
 //
-// Build and install on the Pi:
+// deploy/setup-hat.sh does all of this (and the rest of the HAT set-up). By hand:
 //   dtc -@ -I dts -O dtb -o radpi-codec.dtbo deploy/overlays/radpi-codec.dts
 //   sudo cp radpi-codec.dtbo /boot/firmware/overlays/
 // then in /boot/firmware/config.txt:   dtparam=i2c_arm=on   dtparam=i2s=on   dtoverlay=radpi-codec

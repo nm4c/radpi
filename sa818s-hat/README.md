@@ -85,19 +85,21 @@ Set `radio.type: sa818` in `config.yaml` (see `config.example.yaml`):
   strong one, then step = (dBm difference) ÷ (reading difference) and offset = dBm − reading × step. Set the
   offset to `null` to show the raw reading.
 
-Pi set-up, in `/boot/firmware/config.txt`, then reboot:
+**Pi set-up (Pi 4 or Pi 5):** from the git clone,
 
-- **Serial port (the module):**
-  - **Pi 4:** `dtoverlay=disable-bt`, with the serial console off and the serial hardware on
-    (`raspi-config` → Interface Options → Serial Port). The port is `/dev/serial0`.
-  - **Pi 5:** `dtparam=uart0=on`, and `sa818.port: /dev/ttyAMA0` in `config.yaml`. On a Pi 5,
-    `/dev/serial0` is the separate 3-pin debug connector, not GPIO14/15.
-- **Codec (the sound card):** `dtparam=i2c_arm=on`, `dtparam=i2s=on` and `dtoverlay=radpi-codec`, after
-  building the overlay from the clone (`deploy/overlays/radpi-codec.dts`, instructions at its top). After the
-  reboot, `sudo deploy/radpi-mixer.sh sa818` sets the codec's inputs and outputs, and `config.yaml` needs
-  `audio.input_device: RadPi` and `audio.output_device: RadPi`.
+```
+sudo ./deploy/setup-hat.sh sa818
+sudo reboot
+sudo ./deploy/setup-hat.sh --check
+```
 
-The installer adds the service user to `dialout` for the serial port.
+(or `sudo ./deploy/install.sh --hat sa818` on a new install). It installs the codec overlay (sound card
+"RadPi"), sets the codec's inputs and outputs at the next boot, and frees the UART on GPIO14/15 for the
+module: on a Pi 4, Bluetooth moved off it (`disable-bt`); on a Pi 5, `uart0` on; and on both, no serial
+console or login prompt on it. `--check` says what's set up and how to fix anything that isn't. The server
+then finds the port (`sa818.port: auto`), the sound card and the busy pin by itself.
+
+Power the Pi from its own USB-C supply (official 5.1 V 3 A): the HAT has no power input.
 
 ## Licence
 
