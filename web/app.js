@@ -109,10 +109,12 @@ async function setupAudio() {
     S.rxNode = rx;
     // WebRTC send path: mic -> gain -> MediaStream track (muted until PTT).
     S.txGain = ctx.createGain();
-    S.txGain.gain.value = Number($("#micGain").value);
+    S.txGain.gain.value = 0;   // the mic level, faded up at PTT (setTxGain)
     S.txDest = ctx.createMediaStreamDestination();
     S.txGain.connect(S.txDest);
-    S.txDest.stream.getAudioTracks()[0].enabled = false;
+    // The track stays enabled: switching it on and off at every PTT makes Safari reconfigure its
+    // audio (a pop each time). PTT fades S.txGain instead; the server ignores audio that arrives
+    // while the operator isn't transmitting.
     S.rtcRxGain = ctx.createGain();
     S.rtcRxGain.gain.value = Number($("#vol").value);
     S.rtcRxGain.connect(ctx.destination);
@@ -139,7 +141,9 @@ async function acquireMic() {
   try {
     if (!window.isSecureContext) throw new Error("insecure context");
     const mic = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      // No echo cancellation: the speaker is muted while transmitting, so there's no echo, and in
+      // Safari (Mac and iPhone) it switches the device's audio into voice processing, which pops.
+      audio: { channelCount: 1, echoCancellation: false, noiseSuppression: true, autoGainControl: true },
     });
     if (!S.txNode) {
       const tx = new AudioWorkletNode(S.ctx, "tx-capture", {
@@ -696,6 +700,14 @@ function updateHead() {
 
 // The WebRTC receive gain, eased to its new value: an instant jump while audio plays is a click.
 // tc is the time constant in seconds (about 3x that to settle).
+function setTxGain(value) {
+  if (!S.txGain) return;
+  const t = S.ctx.currentTime;
+  S.txGain.gain.cancelScheduledValues(t);
+  S.txGain.gain.setValueAtTime(S.txGain.gain.value, t);
+  S.txGain.gain.setTargetAtTime(value, t, 0.004);
+}
+
 function setRtcGain(value, tc = 0.004) {
   if (!S.rtcRxGain) return;
   const t = S.ctx.currentTime;
@@ -1521,7 +1533,7 @@ function pttPress() {
   if (S.pending && !S.pending.sent) cancelPendingChannel();
   S.pttWanted = true;
   clearTimeout(S.releaseTimer);
-  if (S.txDest) S.txDest.stream.getAudioTracks()[0].enabled = true;
+  setTxGain(Number($("#micGain").value));
   setRtcGain(0);
   S.rxNode.port.postMessage({ flush: true });
   S.txNode.port.postMessage({ active: true });
@@ -1538,7 +1550,7 @@ function pttRelease(notify = true) {
   // Keep sending a moment longer so the last syllable leaves the phone; the server waits for it.
   clearTimeout(S.releaseTimer);
   S.releaseTimer = setTimeout(() => {
-    if (!S.pttWanted && S.txDest) S.txDest.stream.getAudioTracks()[0].enabled = false;
+    if (!S.pttWanted) setTxGain(0);
     if (!S.pttWanted) setRtcGain(Number($("#vol").value));
   }, 60);
   if (notify) send({ type: "ptt", on: false });
@@ -1694,7 +1706,7 @@ function init() {
   $("#micGain").addEventListener("input", (e) => {
     const g = Number(e.target.value);
     if (S.txNode) S.txNode.port.postMessage({ gain: g });
-    if (S.txGain) S.txGain.gain.value = g;
+    if (S.pttWanted) setTxGain(g);   // otherwise it's applied at the next PTT
   });
   $("#disconnectBtn").addEventListener("click", disconnect);
   $("#logout").addEventListener("click", logout);
