@@ -109,7 +109,7 @@ DEFAULTS = {
         "tx_treble_hz": 2500,
         "busy_threshold_dbfs": -45,
         "share_tx": True,         # while one operator (or mic) transmits, the others hear what went on air
-        "switch_mute_ms": 160,    # listeners' audio muted this long at each PTT press/release (radio switching click)
+        "switch_mute_ms": 0,      # mute listeners this long at each PTT press/release, if a radio clicks as it switches
         "share_tx_gain": 1.0,     #   at this level (it is often louder than received audio: turn down to match)
     },
     "display": {                    # Pimoroni Display HAT Mini on the Pi (server/display.py)

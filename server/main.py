@@ -311,6 +311,8 @@ class RemoteHead:
         audio.switch_mute_ms, fade back in over one frame."""
         if keyed != self._dc_keyed:
             self._dc_keyed = keyed
+            if int(self.cfg["audio"]["switch_mute_ms"]) <= 0:
+                return pcm, shared            # off (the default)
             self._dc_state = "out"
             self._dc_mute = max(0, int(self.cfg["audio"]["switch_mute_ms"]) // int(self.cfg["audio"]["frame_ms"]))
         if self._dc_state is None:
