@@ -106,6 +106,33 @@ class Interpolator:
         return self.fir(up) * self.m
 
 
+class DCBlock:
+    """Takes the constant (DC) out of received audio. A sound card input with an offset is silent
+    on its own, but every switch to or from other audio (PTT, shared transmit audio) becomes a
+    step, which is a loud pop. A first-order high-pass at about 20 Hz, well below speech."""
+
+    def __init__(self, rate, hz=20.0):
+        self.a = math.exp(-2 * math.pi * hz / rate)
+        self.x1 = 0.0
+        self.y1 = 0.0
+        self.primed = False
+
+    def __call__(self, x):
+        if len(x) == 0:
+            return x
+        if not self.primed:          # start from the input's own level, not a step from zero
+            self.x1, self.primed = float(x[0]), True
+        # y[n] = x[n] - x[n-1] + a*y[n-1], done as a filter over the block
+        dx = np.diff(np.concatenate(([self.x1], x.astype(np.float64))))
+        y = np.empty(len(x))
+        acc, a = self.y1, self.a
+        for i, v in enumerate(dx):
+            acc = v + a * acc
+            y[i] = acc
+        self.x1, self.y1 = float(x[-1]), acc
+        return y.astype(np.float32)
+
+
 def _dbfs(x):
     if len(x) == 0:
         return -120.0
@@ -212,6 +239,7 @@ class SoundDeviceAudio:
         self._streams = []
         self._glitches = {}
         self._glitch_logged = 0.0
+        self.dc_block = DCBlock(self.wire_rate)
 
     @staticmethod
     def _device(spec, hat):
@@ -280,7 +308,7 @@ class SoundDeviceAudio:
     def _in_cb(self, indata, frames, t, status):
         if status:
             self._glitch("input", status)
-        y = self.decim(indata[:, 0] * self.rx_gain)
+        y = self.dc_block(self.decim(indata[:, 0] * self.rx_gain))
         self.rx_dbfs = _dbfs(y)
         self.on_rx((np.clip(y, -1, 1) * 32767).astype("<i2").tobytes())
 

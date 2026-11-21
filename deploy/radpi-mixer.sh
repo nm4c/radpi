@@ -41,6 +41,8 @@ for side in Left Right; do
 done
 m PGA 0dB cap
 m AGC off
+# the ADC's own DC filter: without it an input offset turns every switch (PTT) into a pop
+m "ADC HPF Cut-off" 0.0045xFs
 
 # ---- transmit: DAC left -> HPLOUT (and HPLCOM on the Control HAT)
 m "Left DAC Mux" DAC_L1
