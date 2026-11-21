@@ -2,6 +2,8 @@
 #   sudo ./deploy/install.sh --with-ai      (new install)
 #   sudo ./deploy/update.sh --with-ai       (existing install; later updates then keep them current)
 # This pulls in PyTorch (CPU) for the speaker model: well over a gigabyte, several minutes on a Pi.
+# Install with deploy/pip-ai.sh (the scripts above do), which takes torch from PyTorch's CPU-only
+# index: from PyPI it would bring gigabytes of NVIDIA libraries a Pi can't use.
 faster-whisper>=1.0        # bot.stt.backend: faster_whisper
 speechbrain>=1.0           # bot.speaker.backend: ecapa
 torch>=2.1

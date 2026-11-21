@@ -106,7 +106,7 @@ fi
 
 if [[ $ai == on ]] || { [[ -e "$AI_MARK" ]] && (( ai_reqs_changed )); }; then
   echo "== installing the AI agent's packages (the first time is a large download, several minutes)"
-  "$DEST/.venv/bin/pip" install -r "$DEST/requirements-bot.txt"
+  "$SRC/deploy/pip-ai.sh" "$DEST"
   touch "$AI_MARK"
   chown -R radio:radio "$DEST/.venv" "$AI_MARK"
 fi

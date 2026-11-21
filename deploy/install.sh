@@ -44,7 +44,7 @@ python3 -m venv --system-site-packages "$DEST/.venv"
 "$DEST/.venv/bin/pip" install -r "$DEST/requirements.txt"
 if (( with_ai )); then
   echo "== installing the AI agent's packages (large download, several minutes)"
-  "$DEST/.venv/bin/pip" install -r "$DEST/requirements-bot.txt"
+  "$SRC/deploy/pip-ai.sh" "$DEST"
   touch "$AI_MARK"
 fi
 
