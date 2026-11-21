@@ -235,6 +235,9 @@ async function rtcStart() {
     el.play().catch(() => {});
     S.rtcRxEl = el;
     S.ctx.createMediaStreamSource(stream).connect(S.rtcRxGain);
+    // fade in: a stream starting at full level clicks
+    S.rtcRxGain.gain.setValueAtTime(0, S.ctx.currentTime);
+    setRtcGain(S.pttWanted ? 0 : Number($("#vol").value), 0.1);
   };
   pc.onconnectionstatechange = () => {
     if (pc !== S.pc) return;
@@ -691,13 +694,23 @@ function updateHead() {
   renderRecording();
 }
 
+// The WebRTC receive gain, eased to its new value: an instant jump while audio plays is a click.
+// tc is the time constant in seconds (about 3x that to settle).
+function setRtcGain(value, tc = 0.004) {
+  if (!S.rtcRxGain) return;
+  const t = S.ctx.currentTime;
+  S.rtcRxGain.gain.cancelScheduledValues(t);
+  S.rtcRxGain.gain.setValueAtTime(S.rtcRxGain.gain.value, t);
+  S.rtcRxGain.gain.setTargetAtTime(value, t, tc);
+}
+
 // Speaker volume is a playback gain from 0 to 2 (1 = as received). The slider and the head's
 // volume knob both set it; whichever moved updates the other.
 function setSpeakerVolume(gain, from) {
   if (from !== "slider") $("#vol").value = gain;
   if (from !== "head" && S.head) S.head.setVolume(gain * VOLUME_KNOB_UNITY);
   if (S.rxNode) S.rxNode.port.postMessage({ gain });
-  if (S.rtcRxGain && !S.pttWanted) S.rtcRxGain.gain.value = gain; // stays muted while transmitting
+  if (!S.pttWanted) setRtcGain(gain); // stays muted while transmitting
 }
 
 // ---------- selcall ----------
@@ -1509,7 +1522,7 @@ function pttPress() {
   S.pttWanted = true;
   clearTimeout(S.releaseTimer);
   if (S.txDest) S.txDest.stream.getAudioTracks()[0].enabled = true;
-  if (S.rtcRxGain) S.rtcRxGain.gain.value = 0;
+  setRtcGain(0);
   S.rxNode.port.postMessage({ flush: true });
   S.txNode.port.postMessage({ active: true });
   send({ type: "ptt", on: true });
@@ -1526,7 +1539,7 @@ function pttRelease(notify = true) {
   clearTimeout(S.releaseTimer);
   S.releaseTimer = setTimeout(() => {
     if (!S.pttWanted && S.txDest) S.txDest.stream.getAudioTracks()[0].enabled = false;
-    if (!S.pttWanted && S.rtcRxGain) S.rtcRxGain.gain.value = Number($("#vol").value);
+    if (!S.pttWanted) setRtcGain(Number($("#vol").value));
   }, 60);
   if (notify) send({ type: "ptt", on: false });
   render();

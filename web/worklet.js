@@ -18,6 +18,11 @@ class RxPlayer extends AudioWorkletProcessor {
     this.maxLag = Math.round(WIRE_RATE * 0.4); // skip ahead if we fall 400 ms behind
     this.playing = false;
     this.gain = 1;
+    // The level actually applied, eased towards gain (or 0 while not playing) so starting,
+    // stopping, underruns and volume changes don't click. About 5 ms to settle.
+    this.level = 0;
+    this.ease = 1 - Math.exp(-1 / (0.0015 * sampleRate));
+    this.last = 0;
     this.port.onmessage = (e) => this.onMessage(e.data);
   }
 
@@ -55,12 +60,15 @@ class RxPlayer extends AudioWorkletProcessor {
     for (let i = 0; i < out.length; i++) {
       if (!this.playing || this.count < 2) {
         this.playing = false; // underrun: wait for the buffer to refill
-        out[i] = 0;
+        this.level += (0 - this.level) * this.ease;
+        out[i] = this.last * this.level; // fade the last sample out rather than drop to 0
         continue;
       }
       const a = this.buf[this.r];
       const b = this.buf[(this.r + 1) % this.size];
-      out[i] = (a + (b - a) * this.frac) * this.gain;
+      this.last = a + (b - a) * this.frac;
+      this.level += (this.gain - this.level) * this.ease;
+      out[i] = this.last * this.level;
       this.frac += this.step;
       while (this.frac >= 1) {
         this.frac -= 1;

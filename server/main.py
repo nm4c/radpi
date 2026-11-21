@@ -113,6 +113,9 @@ class RemoteHead:
         self.audio = create_audio(cfg, self._on_rx_audio, self.radio)
         self._tasks = set()
         self._ptt_gen = 0
+        self._dc_keyed = False      # _declick: keyed state last frame
+        self._dc_state = None       # None, "out", "mute" or "in"
+        self._dc_mute = 0
         self.rtc_ok = rtc.setup(cfg)
         # Bass/treble for transmitted voice and clips (not selcall tones). One stream at a time
         # goes on air, so one filter state is enough; it is reset at each PTT press.
@@ -285,6 +288,7 @@ class RemoteHead:
             g = float(self.cfg["audio"]["share_tx_gain"])
             shared = sent if g == 1 else (np.clip(np.frombuffer(sent, "<i2") * g, -32768, 32767)
                                          .astype("<i2").tobytes())
+        pcm, shared = self._declick(owner is not None, pcm, shared)
         if self.mic_head:
             self.mic_head.feed_rx(pcm, shared)
         out = shared if shared is not None else pcm
@@ -299,6 +303,36 @@ class RemoteHead:
                 c.rtc.feed(silence if c.id == owner else out)
             elif c.id != owner:
                 c.send_audio(out)
+
+    def _declick(self, keyed, pcm, shared):
+        """What listeners hear around each PTT press and release: the radio's audio jumps as it
+        switches between receive and transmit (a loud click on the SA818), and so does the switch
+        between received and shared transmit audio. So: fade out over one frame, silence for
+        audio.switch_mute_ms, fade back in over one frame."""
+        if keyed != self._dc_keyed:
+            self._dc_keyed = keyed
+            self._dc_state = "out"
+            self._dc_mute = max(0, int(self.cfg["audio"]["switch_mute_ms"]) // int(self.cfg["audio"]["frame_ms"]))
+        if self._dc_state is None:
+            return pcm, shared
+        n = len(pcm) // 2
+        if self._dc_state == "out":
+            ramp = np.linspace(1, 0, n, dtype=np.float32)
+            self._dc_state = "mute" if self._dc_mute else "in"
+        elif self._dc_state == "mute":
+            self._dc_mute -= 1
+            if self._dc_mute <= 0:
+                self._dc_state = "in"
+            ramp = np.zeros(n, np.float32)
+        else:
+            ramp = np.linspace(0, 1, n, dtype=np.float32)
+            self._dc_state = None
+
+        def shape(b):
+            if b is None:
+                return None
+            return (np.frombuffer(b, "<i2") * ramp).astype("<i2").tobytes()
+        return shape(pcm), shape(shared)
 
     # ---- WebRTC ----------------------------------------------------------
 
