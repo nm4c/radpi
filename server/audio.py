@@ -210,6 +210,8 @@ class SoundDeviceAudio:
         self.on_rx = on_rx
         self.rx_dbfs = -120.0
         self._streams = []
+        self._glitches = {}
+        self._glitch_logged = 0.0
 
     @staticmethod
     def _device(spec, hat):
@@ -231,7 +233,7 @@ class SoundDeviceAudio:
         dev_in = self._device(self.a["input_device"], hat)
         dev_out = self._device(self.a["output_device"], hat)
         common = dict(samplerate=self.dev_rate, channels=1, dtype="float32",
-                      blocksize=self.dev_block, latency="low")
+                      blocksize=self.dev_block, latency=self._latency())
         try:
             self._streams = [
                 sd.InputStream(device=dev_in, callback=self._in_cb, **common),
@@ -254,16 +256,37 @@ class SoundDeviceAudio:
             s.close()
         self._streams = []
 
+    def _latency(self):
+        """audio.device_latency: "low", "high", or seconds. More buffering survives the Pi being
+        busy for a moment (a page loading, PTT) without the audio jumping, which clicks."""
+        v = self.a.get("device_latency", "low")
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return str(v)
+
+    def _glitch(self, where, status):
+        """Count sound card over/underruns (each is an audible click) and say so in the log, at
+        most every 10 s, so they can be matched to what was happening."""
+        now = time.monotonic()
+        self._glitches[where] = self._glitches.get(where, 0) + 1
+        if now - self._glitch_logged >= 10:
+            self._glitch_logged = now
+            counts = ", ".join(f"{k} {v}" for k, v in self._glitches.items())
+            self._glitches = {}
+            log.warning("sound card dropouts (each one clicks): %s (%s). If they line up with page loads "
+                        "or PTT, the Pi is too busy to keep up: try audio.device_latency: 0.1", counts, status)
+
     def _in_cb(self, indata, frames, t, status):
         if status:
-            log.debug("input status: %s", status)
+            self._glitch("input", status)
         y = self.decim(indata[:, 0] * self.rx_gain)
         self.rx_dbfs = _dbfs(y)
         self.on_rx((np.clip(y, -1, 1) * 32767).astype("<i2").tobytes())
 
     def _out_cb(self, outdata, frames, t, status):
         if status:
-            log.debug("output status: %s", status)
+            self._glitch("output", status)
         out = self.tx.pull(frames)
         outdata[:, 0] = out
         # What was sent, without tx_gain, so a radio fed at mic level still records at speech level.

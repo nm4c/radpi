@@ -87,6 +87,7 @@ audio:
   device_rate: 48000   # sound card rate; must be an integer multiple of wire_rate
   wire_rate: 16000     # rate sent over the network
   frame_ms: 20
+  device_latency: low      # sound card buffering: low, high or seconds; 0.1 if the log reports dropouts
   rx_gain: 1.0         # radio -> browser
   tx_gain: 1.0         # browser -> radio
   tx_prebuffer_ms: 80  # jitter buffer before TX audio starts playing to the radio

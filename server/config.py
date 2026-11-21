@@ -99,6 +99,7 @@ DEFAULTS = {
         "device_rate": 48000,
         "wire_rate": 16000,
         "frame_ms": 20,
+        "device_latency": "low",  # sound card buffering: low, high or seconds (0.1 if the log reports dropouts)
         "rx_gain": 1.0,
         "tx_gain": 1.0,
         "tx_prebuffer_ms": 80,
