@@ -79,6 +79,12 @@ if [[ $mode == check ]]; then
     bad "no sound card RadPi" "sudo ./deploy/setup-hat.sh ${hat:-control}, then reboot"
   fi
 
+  running=""
+  for p in pipewire wireplumber pulseaudio; do pgrep -x "$p" >/dev/null && running+="$p "; done
+  [[ -z $running ]] && ok "no desktop sound server (PipeWire, WirePlumber, PulseAudio)" \
+    || bad "${running% } running: it grabs the card and resets its levels at every login" \
+           "sudo ./deploy/setup-hat.sh ${hat:-control}"
+
   radio_type=""
   if [[ -x $DEST/.venv/bin/python && -f $DEST/config.yaml ]]; then
     radio_type="$(cd "$DEST" && "$DEST/.venv/bin/python" -c \
@@ -198,6 +204,27 @@ if [[ $hat == sa818 ]]; then
     echo "   hciuart (Bluetooth on the UART) disabled"
   fi
   id radio >/dev/null 2>&1 && usermod -aG dialout radio
+fi
+
+# ---- desktop sound servers off. RadPi uses the HAT's card directly; PipeWire / WirePlumber (or
+# PulseAudio) start with every login, SSH too, grab the card and set its volumes to their own
+# remembered levels (PCM back to -23.5 dB). Masked for all users rather than uninstalled, so
+# nothing that depends on them breaks and upgrades don't bring them back.
+# Undo: sudo systemctl --global unmask <the units below>
+SOUND_SERVERS=(pipewire.socket pipewire.service pipewire-pulse.socket pipewire-pulse.service
+               wireplumber.service filter-chain.service pulseaudio.socket pulseaudio.service)
+masked=0
+for u in "${SOUND_SERVERS[@]}"; do
+  if [[ -n "$(systemctl --global list-unit-files "$u" --no-legend 2>/dev/null)" ]] \
+     && [[ "$(systemctl --global is-enabled "$u" 2>/dev/null)" != masked ]]; then
+    systemctl --global mask -q "$u" 2>/dev/null && masked=1
+  fi
+done
+for p in wireplumber pipewire-pulse pipewire pulseaudio; do pkill -x "$p" 2>/dev/null || true; done
+if (( masked )); then
+  echo "   desktop sound servers (PipeWire, WirePlumber, PulseAudio) switched off for all users"
+  # put back the levels they changed (saved ones; the routing step below sets them the first time)
+  [[ -e /var/lib/radpi/mixer-done ]] && alsactl restore RadPi 2>/dev/null || true
 fi
 
 # ---- codec routing: now if the card is already there, else at the next boot. Only when the HAT
