@@ -69,7 +69,9 @@ if [[ $mode == check ]]; then
     if [[ -n $pcm ]] && awk "BEGIN{exit !($pcm < -1)}"; then
       bad "PCM (transmit level) is at $pcm dB: it should be 0" "sudo /usr/local/sbin/radpi-mixer ${hat:-sa818}"
     fi
-    [[ -e /var/lib/radpi/mixer-done ]] || note "codec routing not set at boot yet: sudo /usr/local/sbin/radpi-mixer ${hat:-sa818}"
+    [[ -e /var/lib/radpi/mixer-done ]] || note "codec routing not set yet: sudo /usr/local/sbin/radpi-mixer ${hat:-sa818}"
+    systemctl is-enabled -q radpi-mixer 2>/dev/null && ok "codec levels restored at every boot (radpi-mixer.service)" \
+      || bad "the codec isn't set up at boot" "sudo ./deploy/setup-hat.sh ${hat:-control}"
   elif [[ -f $BOOT/overlays/radpi-codec.dtbo ]] && grep -qE '^\s*dtoverlay=radpi-codec' "$CONFIG_TXT"; then
     bad "no sound card RadPi, although the overlay is set up" \
         "reboot if you haven't since setting up; otherwise: dmesg | grep -iE 'aic3x|i2s'  (is the HAT seated?)"
@@ -79,12 +81,8 @@ if [[ $mode == check ]]; then
 
   radio_type=""
   if [[ -x $DEST/.venv/bin/python && -f $DEST/config.yaml ]]; then
-    radio_type="$(cd "$DEST" && "$DEST/.venv/bin/python" - 2>/dev/null <<'PY' || true
-from server import config
-c = config.load("config.yaml")
-print(c["radio"]["type"])
-PY
-)"
+    radio_type="$(cd "$DEST" && "$DEST/.venv/bin/python" -c \
+      'from server import config; print(config.load("config.yaml")["radio"]["type"])' 2>/dev/null || true)"
   fi
 
   if [[ $hat == sa818 || $radio_type == sa818 ]]; then

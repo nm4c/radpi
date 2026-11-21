@@ -5,8 +5,12 @@
 #
 #   sudo deploy/radpi-mixer.sh sa818      RadPi SA818 HAT: TX on HPLOUT only (single-ended)
 #   sudo deploy/radpi-mixer.sh control    RadPi Control HAT: TX on HPLOUT + HPLCOM (differential, into T1)
-#   radpi-mixer --firstboot               run once at boot by radpi-mixer.service (deploy/setup-hat.sh
-#                                         sets it up): the HAT from /etc/radpi-hat
+#   radpi-mixer --boot                    run at every boot by radpi-mixer.service (deploy/setup-hat.sh
+#                                         sets it up): waits for the card, then puts back the levels
+#                                         saved with alsactl store, or sets it up as above the first time
+#                                         (the HAT from /etc/radpi-hat). The system's own restore can run
+#                                         before the card appears, leaving the driver's defaults (PCM at
+#                                         -23.5 dB, the routing off).
 #
 # Receive audio comes in on LINE1L (pins 10/11, RX_P/RX_N) on both HATs.
 # Levels after this: everything at 0 dB. Set the on-air levels with audio.rx_gain / audio.tx_gain in
@@ -14,11 +18,15 @@
 set -euo pipefail
 
 firstboot=0
-if [[ "${1:-}" == --firstboot ]]; then
+if [[ "${1:-}" == --boot || "${1:-}" == --firstboot ]]; then
   firstboot=1
   set -- "$(cat /etc/radpi-hat 2>/dev/null || true)"
   # the codec's driver can still be loading this early in boot
   for _ in $(seq 30); do aplay -l 2>/dev/null | grep -q "\[RadPi\]" && break; sleep 1; done
+  if [[ -e /var/lib/radpi/mixer-done ]] && alsactl restore RadPi 2>/dev/null; then
+    echo "Codec levels restored (saved with: sudo alsactl store RadPi)."
+    exit 0
+  fi
 fi
 hat="${1:-}"
 if [[ "$hat" != "sa818" && "$hat" != "control" ]]; then
