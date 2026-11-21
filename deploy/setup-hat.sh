@@ -81,9 +81,15 @@ if [[ $mode == check ]]; then
 
   running=""
   for p in pipewire wireplumber pulseaudio; do pgrep -x "$p" >/dev/null && running+="$p "; done
-  [[ -z $running ]] && ok "no desktop sound server (PipeWire, WirePlumber, PulseAudio)" \
-    || bad "${running% } running: it grabs the card and resets its levels at every login" \
-           "sudo ./deploy/setup-hat.sh ${hat:-control}"
+  if [[ -z $running ]]; then
+    ok "no desktop sound server (PipeWire, WirePlumber, PulseAudio)"
+  elif [[ "$(systemctl --global is-enabled pipewire.socket 2>/dev/null)" == masked ]]; then
+    bad "${running% } still running from a session started before it was switched off" \
+        "log out and back in (or reboot); or now: systemctl --user stop pipewire.socket pipewire-pulse.socket pipewire pipewire-pulse wireplumber"
+  else
+    bad "${running% } running: it grabs the card and resets its levels at every login" \
+        "sudo ./deploy/setup-hat.sh ${hat:-control}"
+  fi
 
   radio_type=""
   if [[ -x $DEST/.venv/bin/python && -f $DEST/config.yaml ]]; then
@@ -219,6 +225,11 @@ for u in "${SOUND_SERVERS[@]}"; do
      && [[ "$(systemctl --global is-enabled "$u" 2>/dev/null)" != masked ]]; then
     systemctl --global mask -q "$u" 2>/dev/null && masked=1
   fi
+done
+# Masking stops them starting, not the copies already running in logged-in sessions (whose
+# sockets would start them straight back up): stop them in every user's service manager too.
+for user in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $2}'); do
+  systemctl --user --machine="$user@" stop "${SOUND_SERVERS[@]}" >/dev/null 2>&1 || true
 done
 for p in wireplumber pipewire-pulse pipewire pulseaudio; do pkill -x "$p" 2>/dev/null || true; done
 if (( masked )); then
