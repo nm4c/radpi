@@ -1,0 +1,85 @@
+# RadPi for an Icom radio with an IP remote mic (IC-F6330D), on any Linux machine: no HAT, GPIO or
+# sound card. PTT, keys, the radio's screen and both directions of audio go over the network
+# (README, "Icom IP mic radio"; docs/ICOM-IP-MIC.md). deploy/install-x86.sh starts you off with
+# this file as /opt/radpi/config.yaml. Every setting not here keeps its default: config.example.yaml
+# lists them all (selcall, clips, recording, Say, the AI agent...).
+#
+# The radio connects to its programmed mic address on TCP 52001 and sends audio to UDP 50000, so
+# either program the radio's mic address as this machine's, or give this machine the mic's address.
+# Open TCP 52001, UDP 50000 and server.port in its firewall (the x86 installer does).
+
+radio:
+  name: "IC-F6330D"        # shown in the page header and the browser tab
+  type: icom
+
+server:
+  host: 0.0.0.0
+  port: 443                # HTTPS: browse to https://<this machine> (install-x86.sh lets the service use 443)
+  # The installer makes a self-signed certificate here (the browser warns once; the microphone
+  # then works). For a trusted one: sudo ./deploy/cert-cloudflare.sh <name>, which replaces these
+  # same two files and renews them.
+  tls_cert: /opt/radpi/tls/fullchain.pem
+  tls_key: /opt/radpi/tls/privkey.pem
+  db_file: radio.db        # operator accounts (sudo radpi-users add <name> --role control) and the audit log
+  state_file: state.json
+  session_days: 30
+  audit_days: 365
+
+icom:
+  listen: 0.0.0.0          # where the radio connects: TCP 52001, RTP on UDP 50000
+  radio_ip: 192.0.2.10     # only accept the radio from this address (your radio's); null = any
+  rx_gain: 4.0             # the radio sends audio at about -43 dBFS: this brings it up 12 dB
+  tx_gain: 0.25            # the radio expects mic level; higher over-deviates. Set by ear on air.
+  direct_entry: true       # change channel by typing its number ("006"); false = UP/DOWN presses
+  entry_digits: 3
+  # The channel buttons on the page. LEFT/RIGHT change zone and each zone has its own channel list,
+  # so each preset gives its zone (as the screen shows it when you change zone), the channel's number
+  # in that zone, and its name exactly as the screen shows it. Picking one changes zone if needed,
+  # types the number and waits for the name; changes made on the radio are followed too.
+  presets:
+    - {zone: "UHF CB", number: 1, name: "CB Rpt 1"}
+    - {zone: "UHF CB", number: 5, name: "CB Rpt 5"}
+    - {zone: "UHF CB", number: 40, name: "CB Ch 40"}
+  zones: ["UHF CB"]        # optional: every zone in RIGHT order, as the screen shows them
+
+# The real IP mic as well (optional): RadPi sits between the radio and the mic, both keep working,
+# and the mic's PTT shows on the page as "Mic". Program the radio's mic address as this machine's;
+# the mic only answers its programmed radio address, so reach it from that address (local, or NAT).
+# mic_head:
+#   mic_ip: 192.0.2.20
+#   # several: mics: [{mic_ip: 192.0.2.20, name: "Ute"}, {mic_ip: 192.0.2.21, name: "Shed"}]
+
+ptt:
+  max_tx_seconds: 120      # hard transmit time limit
+  hold_timeout_ms: 1500    # drop PTT if the browser stops sending keepalives (network loss)
+  tail_ms: 400             # time to finish playing buffered audio after PTT release
+
+audio:
+  wire_rate: 16000         # must be a multiple of 8000 here (the radio's audio is 8 kHz)
+  frame_ms: 20
+  tx_bass_db: 6            # tone control for transmitted voice and clips (0 = flat)
+  tx_treble_db: -3
+  share_tx: true           # while one operator (or the mic) transmits, the others hear it
+  share_tx_gain: 1.0
+
+webrtc:
+  enabled: true            # low-latency audio; browsers fall back to the WebSocket by themselves
+  ice_servers: []          # over the internet behind NAT: ["stun:stun.l.google.com:19302"]
+
+gpio:
+  backend: mock            # nothing to drive on a PC
+
+selcall:
+  enabled: true
+  standard: ccir
+  my_id: null              # this station's own selcall, in quotes ("01234")
+
+clips:
+  enabled: true            # upload audio clips and transmit them
+  dir: clips
+
+record:
+  enabled: true            # the record button: received audio into the clip list
+
+bot:
+  enabled: false           # the AI agent: needs its packages (see config.example.yaml)

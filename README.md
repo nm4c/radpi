@@ -476,6 +476,12 @@ to the radio.
    itself are followed: the matching preset lights up, or none if it's on another channel.
 3. Set `icom.tx_gain` by ear on air: the radio expects mic level, and too much over-deviates.
 
+**On a PC or server instead of a Pi:** with no HAT, nothing here needs a Pi. On Debian, Ubuntu,
+Fedora or AlmaLinux (x86_64 or other), `sudo ./deploy/install-x86.sh` from the clone installs it,
+starting from `config.icom.yaml` (the Icom settings only), on HTTPS port 443 with a self-signed
+certificate until `deploy/cert-cloudflare.sh` gets a trusted one, and opens the radio's ports
+(TCP 52001, UDP 50000) and 443 in firewalld or ufw. Run it again, or `update.sh`, to update.
+
 There is no login or encryption in this protocol: keep it on a private network or VPN.
 `python -m server.icom_cli` is a stand-alone mic for trying it from a terminal.
 
@@ -697,7 +703,7 @@ web/      index.html, app.js, worklet.js (AudioWorklet capture/playback), style.
           control-head/ (control head SVGs and their input handling, control_head.js)
 assets/control-head/  generators for the control head artwork, plus PNGs and layout JSON
 assets/logo/  the RadPi logo and icons (build_logo.py makes them, and web/icons/)
-deploy/   install.sh, update.sh, setup-hat.sh (RadPi HAT set-up and --check), radpi-mixer.sh, cert-cloudflare.sh (Let's Encrypt), overlays/, systemd units
+deploy/   install.sh, install-x86.sh (PC/server, Icom), update.sh, setup-hat.sh (RadPi HAT set-up and --check), radpi-mixer.sh, cert-cloudflare.sh (Let's Encrypt), overlays/, systemd units
 docs/     HARDWARE.md (hand-wired interface), voice/ (training an Australian Piper voice), images/ (screenshots)
 pihat/       Pi HAT for an external radio: KiCad project, schematic reference, JLC BoM
 sa818s-hat/  Pi HAT with a built-in SA818S 1 W UHF transceiver (no external radio)

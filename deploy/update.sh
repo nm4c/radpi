@@ -69,6 +69,11 @@ if (( pull )); then
   exec "$SRC/deploy/update.sh" "${again[@]}"
 fi
 
+# An install made by install-x86.sh (a PC, not a Pi): it updates itself, with its own service file.
+if [[ "$(cat "$DEST/.platform" 2>/dev/null)" == x86 ]]; then
+  exec "$SRC/deploy/install-x86.sh"
+fi
+
 command -v rsync >/dev/null || apt-get install -y rsync
 # The Display HAT Mini (display: in config.yaml) needs the SPI device.
 getent group spi >/dev/null && ! id -nG radio | grep -qw spi && usermod -aG spi radio
