@@ -240,6 +240,9 @@ class SoundDeviceAudio:
         self._glitches = {}
         self._glitch_logged = 0.0
         self.dc_block = DCBlock(self.wire_rate)
+        self._last_in = time.monotonic()
+        self._retry_at = 0.0
+        self.stalls = 0
 
     @staticmethod
     def _device(spec, hat):
@@ -262,9 +265,10 @@ class SoundDeviceAudio:
         dev_out = self._device(self.a["output_device"], hat)
         common = dict(samplerate=self.dev_rate, channels=1, dtype="float32",
                       blocksize=self.dev_block, latency=self._latency())
+        self._in_args = dict(device=dev_in, callback=self._in_cb, **common)
         try:
             self._streams = [
-                sd.InputStream(device=dev_in, callback=self._in_cb, **common),
+                sd.InputStream(**self._in_args),
                 sd.OutputStream(device=dev_out, callback=self._out_cb, **common),
             ]
             for s in self._streams:
@@ -275,14 +279,55 @@ class SoundDeviceAudio:
             log.error("No sound card? %s. Otherwise set audio.input_device / output_device in config.yaml "
                       "(list them: /opt/radpi/.venv/bin/python -m sounddevice)", pi.SETUP_HINT)
             raise SystemExit(f"audio: can't open the sound card: {e}") from None
+        self._last_in = time.monotonic()
         log.info("audio started: in=%s out=%s @ %d Hz", dev_in or "default", dev_out or "default",
                  self.dev_rate)
 
     def stop(self):
         for s in self._streams:
-            s.stop()
-            s.close()
+            try:
+                s.abort()
+                s.close()
+            except Exception as e:
+                log.debug("closing a stream: %s", e)
         self._streams = []
+
+    STALL_S = 2.0          # no audio from the card for this long: it has stopped
+    RETRY_S = 10.0
+
+    def check_stall(self):
+        """Called about once a second. The input can stop without any error while the output
+        carries on (seen on the RadPi Control HAT: receive audio gone, the level frozen, transmit
+        still fine until a reboot): no more blocks arrive at all. Reopening just the input brings
+        it back, and never interrupts a transmission."""
+        if not self._streams:
+            return
+        now = time.monotonic()
+        if self._retry_at:
+            if now < self._retry_at:
+                return
+        elif now - self._last_in < self.STALL_S:
+            return
+        log.error("sound card input stopped (no audio for %.0f s): reopening it", now - self._last_in)
+        import sounddevice as sd
+        try:
+            old = self._streams[0]
+            try:
+                old.abort()
+                old.close()
+            except Exception as e:
+                log.debug("closing the stalled input: %s", e)
+            self.decim = Decimator(self.m)
+            new = sd.InputStream(**self._in_args)
+            new.start()
+            self._streams[0] = new
+            self._last_in = time.monotonic()
+            self._retry_at = 0.0
+            self.stalls += 1
+            log.info("sound card input reopened (%d time(s) since start-up)", self.stalls)
+        except Exception as e:
+            log.error("reopening the input failed: %s; trying again in %.0f s", e, self.RETRY_S)
+            self._retry_at = now + self.RETRY_S
 
     def _latency(self):
         """audio.device_latency: "low", "high", or seconds. More buffering survives the Pi being
@@ -306,6 +351,7 @@ class SoundDeviceAudio:
                         "or PTT, the Pi is too busy to keep up: try audio.device_latency: 0.1", counts, status)
 
     def _in_cb(self, indata, frames, t, status):
+        self._last_in = time.monotonic()
         if status:
             self._glitch("input", status)
         y = self.dc_block(self.decim(indata[:, 0] * self.rx_gain))

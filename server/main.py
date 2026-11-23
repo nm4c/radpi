@@ -1210,6 +1210,8 @@ class RemoteHead:
                     self.db.prune(self.cfg["server"]["audit_days"])
                 except Exception as e:
                     log.error("pruning the audit log: %s", e)
+            if tick % 10 == 0 and hasattr(self.audio, "check_stall"):
+                self.audio.check_stall()
             if tick % 2 == 0:  # 5 Hz meters
                 meter = {"type": "meter", "rx_dbfs": round(self.audio.rx_dbfs, 1), "busy": self._busy()}
                 if self.recorder and self.recorder.active:
