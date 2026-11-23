@@ -28,6 +28,10 @@ through the mic's speaker when you let go. Commands:
     bits                      clear them (back to the default icons)
     tone [seconds]            1 kHz tone out of the mic's speaker
     raw <group> <cmd> [hex]   send any frame, e.g. raw 02 0e 04
+    ipconf <radio ip> <mask> <gateway> <mic ip> <mask> <gateway>
+                              give the mic new network settings, as the radio does when it's
+                              programmed with a new mic address (06 00). Asks to confirm. Wrong
+                              values leave the mic unreachable until its radio programs it again.
     bye                       tell the mic the radio is switching off
     status / quit
 """
@@ -41,7 +45,7 @@ import sys
 import time
 import wave
 
-from .icom_ipmic import DEFAULT_ICONS, FRAME, KEYS, RATE, Mic, MicLink
+from .icom_ipmic import DEFAULT_ICONS, FRAME, KEYS, RATE, Mic, MicLink, ip_config, parse_ip_config
 
 
 def tone(seconds, hz=1000, level=0.1):
@@ -81,7 +85,7 @@ async def radio_mode(a):
     say = lambda *x: print(f"[{time.monotonic() - t0:7.2f}]", *x, flush=True)
     names = {v: k for k, v in KEYS.items()}
     icons = bytearray(DEFAULT_ICONS)
-    st = {"text": "RADPI", "rec": bytearray(), "ptt": False, "play": None}
+    st = {"text": "RADPI", "rec": bytearray(), "ptt": False, "play": None, "ipconf": None}
 
     def show(text=None):
         if text is not None:
@@ -168,6 +172,20 @@ async def radio_mode(a):
                     await play(link, tone(float(w[1]) if len(w) > 1 else 2))
                 elif c == "raw":
                     link.send_frame(int(w[1], 16), int(w[2], 16), bytes.fromhex("".join(w[3:])))
+                elif c == "ipconf":
+                    payload = ip_config(*w[1:7])
+                    st["ipconf"] = payload
+                    say("about to send the mic (06 00):")
+                    for k, v in parse_ip_config(payload).items():
+                        say(f"   {k:10} {v}")
+                    say("type yes to send it, anything else to cancel")
+                elif c == "yes" and st["ipconf"]:
+                    link.send_frame(0x06, 0x00, st["ipconf"])
+                    st["ipconf"] = None
+                    say("sent: watch for the mic's answer (run with -v to see every frame)")
+                elif st["ipconf"]:
+                    st["ipconf"] = None
+                    say("ipconf cancelled")
                 elif c == "bye":
                     link.goodbye()
                 else:

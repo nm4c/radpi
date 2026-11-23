@@ -66,6 +66,7 @@ The functions are this radio's programming. Typing three digits jumps straight t
 | `01 04 [f 00 00 00]` | Audio routing: `01` = radio is sending speaker audio, `08` = radio is transmitting and wants mic audio |
 | `02 0b [x]` | Backlight: `02` on (any key), `00` off about 10 s later |
 | `02 0e [04/05]` | Toggles while scanning (blinking icon) |
+| `06 00 [24]` | Network settings for the mic, sent when the radio is programmed with a new mic address: six IPv4 addresses in network byte order: radio address, radio netmask, radio gateway, mic address, mic netmask, mic gateway (e.g. `c0 00 02 0a ff ff ff 00 c0 00 02 fe c0 00 02 14 ...` = radio 192.0.2.10/24 via 192.0.2.254, mic 192.0.2.20). Not sent on a write that doesn't change them. What the mic answers isn't known yet. `icom_cli --mic` can send it (`ipconf`) |
 
 ## Flows
 

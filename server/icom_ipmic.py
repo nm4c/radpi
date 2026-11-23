@@ -158,6 +158,20 @@ def display_bytes(text, flags=b""):
     return out.ljust(DISPLAY_LEN, b"\0")
 
 
+def ip_config(radio_ip, radio_mask, radio_gw, mic_ip, mic_mask, mic_gw):
+    """06 00 payload: the network settings the radio gives its mic (seen when the radio was
+    programmed with a new mic address): six IPv4 addresses, network byte order."""
+    import ipaddress
+    return b"".join(ipaddress.IPv4Address(a).packed
+                    for a in (radio_ip, radio_mask, radio_gw, mic_ip, mic_mask, mic_gw))
+
+
+def parse_ip_config(data):
+    import ipaddress
+    names = ("radio_ip", "radio_mask", "radio_gw", "mic_ip", "mic_mask", "mic_gw")
+    return {n: str(ipaddress.IPv4Address(bytes(data[i * 4:i * 4 + 4]))) for i, n in enumerate(names)}
+
+
 def display_flags(data):
     """Icons decoded from the bytes after the text. Only the ones seen in captures are named;
     `raw` keeps the rest (hex) for working out more."""
