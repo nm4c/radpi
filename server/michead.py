@@ -27,8 +27,9 @@ import time
 import numpy as np
 
 from .audio import Decimator, Interpolator
-from .icom_ipmic import (AUDIO_RX, AUDIO_TX, DEFAULT_ICONS, FRAME, KEYS, RATE, SIGNAL_BARS, MicLink,
-                         frame)
+from .icom_ipmic import (AUDIO_RX, AUDIO_TX, DEFAULT_ICONS, FRAME, KEYS, LED_GREEN, LED_RED, RATE,
+                         SIGNAL_BARS, MicLink, frame)
+from .radio import RadioError
 
 log = logging.getLogger("michead")
 
@@ -104,11 +105,19 @@ class MicHeads:
         self.heads = [MicHead(cfg, server, m, MIC_CLIENT_ID - i, self)
                       for i, m in enumerate(mic_configs(cfg["mic_head"]))]
         if self.proxy:
-            self.radio.mic.on_frame = self._from_radio
+            # every radio's frames (several Icom radios: each kept, the selected one's shown)
+            for n, r in enumerate(getattr(self.radio, "radios", None) or [self.radio]):
+                r.mic.on_frame = (lambda *f, n=n: self._from_radio(n, *f))
+            if hasattr(self.radio, "on_select"):
+                self.radio.on_select.append(self._on_select)
 
-    def _from_radio(self, *frame_):
+    def _from_radio(self, n, *frame_):
         for h in self.heads:
-            h._from_radio(*frame_)
+            h._from_radio(n, *frame_)
+
+    def _on_select(self, n):
+        for h in self.heads:
+            h._radio_switched()
 
     def op(self, cid):
         return next((h.op for h in self.heads if h.op.id == cid), None)
@@ -172,8 +181,9 @@ class MicHead:
         self._shown = None        # (text, icons, led, light, audio flags) last sent
         self._spk = False         # sending speaker audio
         # proxy: the radio's latest frames, replayed to the mic when it (re)connects
-        self._cache = {}
-        self._screen = None
+        self._caches = {}         # per radio (index): its latest frames, replayed to the mic
+        self._screens = {}
+        self._led_sent = None
         self._radio_link = None
         self._flags_sent = None
 
@@ -205,20 +215,55 @@ class MicHead:
         self._tick()
 
     # ---- proxy: radio -> mic
-    def _from_radio(self, start, group, cmd, data):
+    def _ri(self):
+        return getattr(self.radio, "active_index", 0)
+
+    @property
+    def _cache(self):
+        return self._caches.setdefault(self._ri(), {})
+
+    @property
+    def _screen(self):
+        return self._screens.get(self._ri())
+
+    def _from_radio(self, n, start, group, cmd, data):
+        cache = self._caches.setdefault(n, {})
         if group == 0x05:             # the radio <-> RadPi session, not the mic's
             if cmd == 0x03:           # radio closing: its next session starts from scratch
-                self._cache.clear()
-                self._screen = None
+                cache.clear()
+                self._screens[n] = None
             return
         if (group, cmd) == (0x02, 0x0A):
-            self._screen = data
+            self._screens[n] = data
         elif (group, cmd) not in ((0x02, 0x07), (0x02, 0x08)):
-            self._cache[(group, cmd)] = data
+            cache[(group, cmd)] = data
+        if n != self._ri():
+            return                    # not the selected radio: kept for when it is
         if (group, cmd) == (0x01, 0x04):
             self._sync_flags()
+        elif (group, cmd) == (0x02, 0x02):
+            self._led_update()
         elif self.connected:
             self.link.send_frame(group, cmd, data)
+
+    def _led_update(self):
+        """The mic's LED: the selected radio's (red transmitting, green busy); when that's off and
+        another radio is receiving, flashing orange (red + green) about once a second."""
+        if not self.connected:
+            return
+        want = (self._cache.get((0x02, 0x02)) or b"\0")[0]
+        if not want and getattr(self.radio, "others_busy", lambda: False)():
+            want = (LED_RED | LED_GREEN) if int(time.monotonic() * 2) % 2 == 0 else 0
+        if want != self._led_sent:
+            self._led_sent = want
+            self.link.send_frame(0x02, 0x02, bytes((want,)))
+
+    def _radio_switched(self):
+        """Another radio selected: say which, then show its screen (replayed when the name goes)."""
+        self._flags_sent = None
+        self._led_sent = None
+        name = getattr(getattr(self.radio, "active", None), "name", "") or "RADIO"
+        self.flash(name.upper()[:8])
 
     def _flags_payload(self):
         """01 04 for this mic: the radio's, except that it only asks this mic for audio when it
@@ -252,11 +297,22 @@ class MicHead:
         if self._screen is not None:
             out += frame(0x02, 0x07, b"\x02") + frame(0x02, 0x0A, self._screen) + frame(0x02, 0x08, b"\x00\x44")
         self.link._send(out)
+        self._led_sent = (self._cache.get((0x02, 0x02)) or b"\0")[0]
+        self._led_update()
 
     # ---- keys
     def _on_key(self, code, down):
         name = KEY_NAMES.get(code)
         if self.proxy:
+            r = self.radio
+            if hasattr(r, "select") and name == r.switch_key:   # several radios: step to the next
+                if down:
+                    try:
+                        self.server.select_radio((r.active_index + 1) % len(r.radios), self.op)
+                    except RadioError as e:
+                        log.info("%s: %s", self.op.name, e)
+                        self.flash("NO")
+                return
             if self.radio.stepping:      # RadPi is typing a channel: keep out of its way
                 return
             if not self.radio.link:
@@ -436,6 +492,8 @@ class MicHead:
             elif self._shown and self._shown[0] == "flash":
                 self._shown = None
                 self._replay()
+            else:
+                self._led_update()        # the orange flash for another radio receiving
             return
         if self._entry and now - self._entry_t > ENTRY_TIMEOUT_S:
             self._entry = ""

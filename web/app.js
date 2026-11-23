@@ -1473,6 +1473,11 @@ function handle(m) {
       buildChannels();
       rtcStart();
       break;
+    case "channels": // another radio selected: its own presets
+      S.channels = m.channels;
+      if (S.pending) cancelPendingChannel();
+      buildChannels();
+      break;
     case "state":
       S.server = m;
       S.recBase = m.recording ? performance.now() - m.recording.seconds * 1000 : null;
@@ -1623,9 +1628,36 @@ function buildChannels() {
   render();
 }
 
+// Several Icom radios (icom.radios): a button for each in the top bar. One is used by everyone;
+// switching is refused mid-transmission, and listen-only accounts can't switch.
+function renderRadios(st) {
+  const box = $("#radioPick");
+  const list = st.radios;
+  box.hidden = !list || list.length < 2;
+  if (box.hidden) return;
+  const locked = st.ptt.active || st.stepping || S.role !== "control";
+  const key = JSON.stringify(list) + locked;
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  box.replaceChildren(...list.map((r) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "radio-pill";
+    b.textContent = r.name;
+    b.dataset.selected = r.selected;
+    b.dataset.busy = r.busy;
+    b.dataset.link = r.link;
+    b.disabled = r.selected || locked;
+    b.title = !r.link ? "Not connected" : r.busy ? "Receiving" : r.selected ? "In use" : "Switch to this radio";
+    b.addEventListener("click", () => send({ type: "radio_select", radio: r.n }));
+    return b;
+  }));
+}
+
 function render() {
   const st = S.server;
   if (!st) return;
+  renderRadios(st);
   const p = st.ptt;
   const otherTx = p.active && !p.mine;
   const busyRadio = p.active || st.stepping;

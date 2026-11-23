@@ -41,6 +41,16 @@ icom:
     - {zone: "UHF CB", number: 5, name: "CB Rpt 5"}
     - {zone: "UHF CB", number: 40, name: "CB Ch 40"}
   zones: ["UHF CB"]        # optional: every zone in RIGHT order, as the screen shows them
+  # Several radios (2 or 3 base sites, say): list them under radios:, each with its own address,
+  # presets and zones (anything not given comes from the settings above). All stay connected; one is
+  # selected for everyone, picked from the buttons at the top of the page or with switch_key on the
+  # mic (the drawn one or a real one). The others are silent but show BUSY on their button, and a
+  # real mic's LED flashes orange while one of them is receiving. Program each radio's mic address
+  # as this machine's.
+  # switch_key: p3          # the mic key that steps to the next radio (none = only the page)
+  # radios:
+  #   - {name: "Site A", radio_ip: 192.0.2.10, presets: [{zone: "UHF CB", number: 1, name: "CB Rpt 1"}]}
+  #   - {name: "Site B", radio_ip: 192.0.2.11, presets: [{zone: "UHF CB", number: 5, name: "CB Rpt 5"}]}
 
 # The real IP mic as well (optional): RadPi sits between the radio and the mic, both keep working,
 # and the mic's PTT shows on the page as "Mic". Program the radio's mic address as this machine's;

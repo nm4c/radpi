@@ -19,9 +19,11 @@ docs/ICOM-IP-MIC.md):
 """
 
 import asyncio
+import json
 import logging
 import threading
 import time
+from pathlib import Path
 
 import numpy as np
 
@@ -70,9 +72,13 @@ class _NetPtt:
 class IcomRadio(Radio):
     kind = "icom"
 
-    def __init__(self, cfg, on_change):
+    def __init__(self, cfg, on_change, icfg=None, name=None):
+        """icfg: this radio's settings when there are several (an icom.radios entry merged over
+        icom:); else icom: itself."""
         super().__init__(cfg, on_change)
-        i, c = cfg["icom"], cfg["channel"]
+        i, c = (icfg if icfg is not None else cfg["icom"]), cfg["channel"]
+        self.name = name or str(cfg["radio"]["name"])
+        self.rx_gain, self.tx_gain = float(i["rx_gain"]), float(i["tx_gain"])
         if i.get("presets"):
             self.presets = [{"name": " ".join(str(p["name"]).split()), "number": int(p["number"]),
                              "zone": norm(p["zone"]) if p.get("zone") else None,
@@ -384,6 +390,95 @@ class IcomRadio(Radio):
         self.mic.close_now()
 
 
+def radio_configs(i):
+    """icom.radios entries, each merged over the icom: settings, with a name."""
+    base = {k: v for k, v in i.items() if k != "radios"}
+    out = []
+    for n, e in enumerate(i.get("radios") or [], 1):
+        c = {**base, **e}
+        c["name"] = str(e.get("name") or f"Radio {n}")
+        out.append(c)
+    return out
+
+
+class IcomRadios:
+    """Several Icom radios (icom.radios), one selected for everyone. Each is an IcomRadio with its
+    own mic session, presets and remembered channel, all connected all the time; the selected one
+    is what the page, PTT, the channel buttons, the audio and a real mic (michead) see. Anything
+    not defined here is the selected radio's, so the rest of RadPi treats this like one radio."""
+
+    kind = "icom"
+
+    def __init__(self, cfg, on_change):
+        self._on_change = on_change
+        sf = Path(cfg["server"]["state_file"])
+        radios = []
+        for n, e in enumerate(radio_configs(cfg["icom"]), 1):
+            rcfg = {**cfg, "server": {**cfg["server"], "state_file": str(sf.with_name(f"{sf.stem}-{n}{sf.suffix}"))}}
+            radios.append(IcomRadio(rcfg, on_change, icfg=e, name=e["name"]))
+        self.radios = radios
+        self.switch_key = str(cfg["icom"].get("switch_key") or "none")
+        self._sel_file = sf.with_name(f"{sf.stem}-radio{sf.suffix}")
+        self.active_index = 0
+        try:
+            self.active_index = min(len(radios) - 1, max(0, int(json.loads(self._sel_file.read_text())["radio"])))
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        self.on_select = []       # callbacks(index): the real mic heads
+        log.info("%d radios: %s; selected: %s", len(radios), ", ".join(r.name for r in radios), self.active.name)
+
+    def __getattr__(self, name):
+        radios = self.__dict__.get("radios")
+        if not radios:
+            raise AttributeError(name)
+        return getattr(radios[self.__dict__.get("active_index", 0)], name)
+
+    @property
+    def active(self):
+        return self.radios[self.active_index]
+
+    def radio_list(self):
+        return [{"n": n, "name": r.name, "busy": r.busy_input, "link": r.link, "selected": n == self.active_index}
+                for n, r in enumerate(self.radios)]
+
+    def others_busy(self):
+        return any(r.busy_input for n, r in enumerate(self.radios) if n != self.active_index)
+
+    def select(self, n):
+        if not 0 <= n < len(self.radios):
+            raise RadioError(f"No radio {n + 1}")
+        if n == self.active_index:
+            return False
+        if any(r.ptt_owner is not None for r in self.radios):
+            raise RadioError("Can't change radio while transmitting")
+        if any(r.stepping for r in self.radios):
+            raise RadioError("Wait for the channel change to finish")
+        self.active._release_all()
+        self.active_index = n
+        try:
+            self._sel_file.write_text(json.dumps({"radio": n}))
+        except OSError as e:
+            log.warning("could not save the selected radio: %s", e)
+        log.info("selected radio: %s", self.active.name)
+        for cb in self.on_select:
+            try:
+                cb(n)
+            except Exception:
+                log.exception("radio switch callback")
+        self._on_change()
+        return True
+
+    def select_next(self):
+        return self.select((self.active_index + 1) % len(self.radios))
+
+    async def run(self):
+        await asyncio.gather(*(r.run() for r in self.radios))
+
+    def close(self):
+        for r in self.radios:
+            r.close()
+
+
 class IcomAudio:
     """The audio side of IcomRadio, in place of the sound card: the same interface as
     audio.SoundDeviceAudio. A thread ticks every frame: it hands RadPi one frame of received audio
@@ -397,16 +492,17 @@ class IcomAudio:
         self.frame = self.wire_rate * int(a["frame_ms"]) // 1000
         self.frame_s = int(a["frame_ms"]) / 1000
         self.n8 = self.frame // self.m
-        self.rx_gain = float(i["rx_gain"])
-        self.tx_gain = float(i["tx_gain"])
         self.up = Interpolator(self.m)
         self.down = Decimator(self.m)
         self.tx = _TxBuffer(self.wire_rate, a["tx_prebuffer_ms"])
         self.tx_mon = _TxMonitor(self.frame * 2)
         self.on_rx = on_rx
         self.rx_dbfs = -120.0
-        self.mic = radio.mic
-        self.mic.on_audio = self._rx
+        # Audio follows the selected radio (IcomRadios): every radio's speaker audio arrives, only
+        # the selected one's is played; transmit audio goes to the selected one.
+        self.radio = radio
+        for n, r in enumerate(getattr(radio, "radios", [radio])):
+            r.mic.on_audio = (lambda pcm, n=n: self._rx(pcm) if getattr(self.radio, "active_index", 0) == n else None)
         self._rx_lock = threading.Lock()
         self._rx_buf = np.zeros(0, np.float32)
         self._rx_started = False
@@ -416,7 +512,7 @@ class IcomAudio:
 
     def _rx(self, pcm):
         """From the event loop: one RTP packet from the radio (int16 LE, 8 kHz)."""
-        x = np.frombuffer(pcm, "<i2").astype(np.float32) * (self.rx_gain / 32768)
+        x = np.frombuffer(pcm, "<i2").astype(np.float32) * (self.radio.rx_gain / 32768)
         with self._rx_lock:
             self._rx_buf = np.concatenate([self._rx_buf, x])
             cap = RATE * RX_MAX_MS // 1000
@@ -464,12 +560,13 @@ class IcomAudio:
 
             # Hold transmit audio back until the radio is really transmitting, so the first
             # syllable isn't sent into a radio that's still switching over.
-            if self.mic.flags & AUDIO_TX:
+            mic = self.radio.mic        # the selected radio's
+            if mic.flags & AUDIO_TX:
                 out = self.tx.pull(self.frame)
                 self.tx_mon.put(out)
-                x8 = np.clip(self.down(out) * self.tx_gain, -1, 1)
+                x8 = np.clip(self.down(out) * self.radio.tx_gain, -1, 1)
                 payload = (x8 * 32767).astype(">i2").tobytes()
-                self.loop.call_soon_threadsafe(self.mic.send_audio, payload)
+                self.loop.call_soon_threadsafe(mic.send_audio, payload)
             else:
                 self.tx_mon.put(np.zeros(self.frame, np.float32))
 

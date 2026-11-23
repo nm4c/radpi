@@ -236,6 +236,66 @@ class RtpPort:
             cb(data, addr)
 
 
+class CtrlListener:
+    """The control port (TCP 52001), shared by every mic emulator on this address: with several
+    radios each connects in here, and is handed to the Mic for its address (else to one that takes
+    any radio)."""
+
+    _open = {}
+
+    def __init__(self, key):
+        self.key = key
+        self.handlers = {}
+        self.server = None
+        self.users = 0
+        self.ready = asyncio.Event()
+
+    @classmethod
+    async def get(cls, listen, port):
+        key = (listen, port)
+        lis = cls._open.get(key)
+        if lis is None:
+            lis = cls._open[key] = cls(key)
+            try:
+                # reuse_port: a MicLink may connect out from this same port (RadPi between radio and mic)
+                lis.server = await asyncio.start_server(lis._client, listen, port,
+                                                        reuse_port=hasattr(socket, "SO_REUSEPORT"))
+            except BaseException:
+                del cls._open[key]
+                lis.ready.set()
+                raise
+            lis.ready.set()
+        else:
+            await lis.ready.wait()
+            if lis.server is None:
+                raise OSError(f"tcp {listen}:{port} could not be opened")
+        lis.users += 1
+        return lis
+
+    def add(self, cb, ip=None):
+        self.handlers[ip] = cb
+
+    def remove(self, ip=None):
+        self.handlers.pop(ip, None)
+
+    def release(self):
+        self.users -= 1
+        if self.users <= 0 and self.server:
+            self.server.close()
+            self.server = None
+            if self._open.get(self.key) is self:
+                del self._open[self.key]
+
+    async def _client(self, reader, writer):
+        peer = writer.get_extra_info("peername")[0]
+        cb = self.handlers.get(peer) or self.handlers.get(None)
+        if cb is None:
+            log.warning("refusing control connection from %s (not a configured radio)", peer)
+            writer.close()
+            return
+        await cb(reader, writer)
+
+
 class _HubProto(asyncio.DatagramProtocol):
     def __init__(self, hub):
         self.hub = hub
@@ -292,12 +352,12 @@ class Mic:
 
     # ---- lifecycle
     async def start(self):
-        # reuse_port: a MicLink may connect out from this same port (RadPi between radio and mic)
-        self._server = await asyncio.start_server(self._client, self.listen, self.ctrl_port,
-                                                  reuse_port=hasattr(socket, "SO_REUSEPORT"))
+        self._listener = await CtrlListener.get(self.listen, self.ctrl_port)
+        self._listener.add(self._client, self.radio_ip or None)
         self._udp = await RtpPort.get(self.listen, self.rtp_port)
-        self._udp.add(self._on_rtp)
-        log.info("listening on %s tcp %d / udp %d", self.listen, self.ctrl_port, self.rtp_port)
+        self._udp.add(self._on_rtp, self.radio_ip or None)
+        log.info("listening on %s tcp %d / udp %d%s", self.listen, self.ctrl_port, self.rtp_port,
+                 f" for the radio at {self.radio_ip}" if self.radio_ip else "")
 
     def drop(self):
         """Close the control link; the radio will connect again."""
@@ -306,10 +366,12 @@ class Mic:
 
     def close_now(self):
         self.drop()
-        if getattr(self, "_server", None):
-            self._server.close()
+        if getattr(self, "_listener", None):
+            self._listener.remove(self.radio_ip or None)
+            self._listener.release()
+            self._listener = None
         if self._udp:
-            self._udp.remove()
+            self._udp.remove(self.radio_ip or None)
             self._udp.release()
             self._udp = None
 

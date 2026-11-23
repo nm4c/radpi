@@ -285,9 +285,9 @@ class ButtonRadio(Radio):
 def create_radio(cfg, on_change):
     kind = cfg["radio"]["type"]
     if kind == "icom":
-        from .icom import IcomRadio
+        from .icom import IcomRadio, IcomRadios
 
-        return IcomRadio(cfg, on_change)
+        return IcomRadios(cfg, on_change) if cfg["icom"].get("radios") else IcomRadio(cfg, on_change)
     if kind == "sa818":
         from .sa818 import SA818Radio
 

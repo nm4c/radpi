@@ -476,6 +476,12 @@ to the radio.
    itself are followed: the matching preset lights up, or none if it's on another channel.
 3. Set `icom.tx_gain` by ear on air: the radio expects mic level, and too much over-deviates.
 
+**Several radios:** list them under `icom.radios` (each with its address, presets and zones). They
+all stay connected and one is selected for everyone: buttons at the top of the page pick it, as does
+P3 on the mic (`icom.switch_key`), which shows the radio's name before its screen. The others stay
+silent but show BUSY on their button, and a real mic's LED flashes orange while one of them is
+receiving. Switching waits for a transmission to finish.
+
 **On a PC or server instead of a Pi:** with no HAT, nothing here needs a Pi. On Debian, Ubuntu,
 Fedora or AlmaLinux (x86_64 or other), `sudo ./deploy/install-x86.sh` from the clone installs it,
 starting from `config.icom.yaml` (the Icom settings only), on HTTPS port 443 with a self-signed

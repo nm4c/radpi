@@ -47,6 +47,16 @@ button.danger { color: var(--tx); }
   max-width: 720px; margin: 0 auto; padding: 14px 0;
 }
 .brand { font-weight: 700; letter-spacing: .02em; }
+/* Several Icom radios: one button each, the selected one lit, a green dot while one is receiving */
+.radio-pick { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: 0 8px; }
+.radio-pill {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px; min-height: 28px;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+}
+.radio-pill[data-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; opacity: 1; }
+.radio-pill[data-busy="true"]::before { content: "●"; color: var(--busy); margin-right: 5px; }
+.radio-pill[data-selected="true"][data-busy="true"]::before { color: #fff; }
+.radio-pill[data-link="false"] { opacity: .45; }
 .brand .sub { color: var(--muted); font-weight: 400; }
 .status {
   font-size: 13px; padding: 4px 10px; border-radius: 999px;

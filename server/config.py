@@ -48,6 +48,8 @@ DEFAULTS = {
         "presets": [],              # the channel buttons: [{zone, number, name}] (see config.example.yaml)
         "zones": [],                # zone names in RIGHT order, as the screen shows them (optional)
         "radio_rtp_port": 50000,    # the radio's RTP port (always 50000 on a real radio; for testing)
+        "radios": [],               # several radios: [{name, radio_ip, presets, zones, ...}] over these settings
+        "switch_key": "p3",         # with several radios: the mic key that steps to the next one (or none)
     },
     "mic_head": {                   # a real Icom IP mic as a control head (server/michead.py)
         "mic_ip": None,             # the mic's address: set to switch it on
@@ -259,6 +261,36 @@ DEFAULTS = {
 }
 
 
+def _check_icom(i, where, cfg):
+    """One radio's icom settings (icom:, or one entry of icom.radios merged over it)."""
+    for key in ("rx_gain", "tx_gain"):
+        if not 0 < float(i[key]) <= 20:
+            raise SystemExit(f"config: {where}.{key} must be more than 0 and at most 20")
+    if not 1 <= int(i["entry_digits"]) <= 4:
+        raise SystemExit(f"config: {where}.entry_digits must be 1-4")
+    presets = i.get("presets") or []
+    if not isinstance(presets, list) or not all(isinstance(p, dict) for p in presets):
+        raise SystemExit(f"config: {where}.presets must be a list of {{zone, number, name}}")
+    for p in presets:
+        try:
+            num = int(p["number"])
+        except (KeyError, TypeError, ValueError):
+            raise SystemExit(f"config: {where}.presets: {p}: needs a number (the channel's number in its zone)") from None
+        if not str(p.get("name") or "").strip():
+            raise SystemExit(f"config: {where}.presets: {p}: needs a name, exactly as the radio's screen shows it")
+        if not 1 <= num < 10 ** int(i["entry_digits"]):
+            raise SystemExit(f"config: {where}.presets: {p}: number must be 1 to {10 ** int(i['entry_digits']) - 1}")
+    if presets and not i["direct_entry"]:
+        raise SystemExit(f"config: {where}.presets need direct_entry (channels are typed by number)")
+    if not presets and i["direct_entry"] and int(cfg["channel"]["count"]) >= 10 ** int(i["entry_digits"]):
+        raise SystemExit("config: channel.count has more digits than icom.entry_digits")
+    if i.get("ident"):
+        try:
+            bytes.fromhex(str(i["ident"]))
+        except ValueError:
+            raise SystemExit(f"config: {where}.ident must be hex") from None
+
+
 def _check_mic_head(cfg):
     top = cfg["mic_head"]
     mics = top.get("mics") or []
@@ -397,35 +429,30 @@ def load(path):
     if kind not in ("buttons", "sa818", "icom"):
         raise SystemExit("config: radio.type must be buttons, sa818 or icom")
     if kind == "icom":
-        i = cfg["icom"]
         if int(a["wire_rate"]) % 8000:
             raise SystemExit("config: audio.wire_rate must be a multiple of 8000 for radio.type icom")
-        for key in ("rx_gain", "tx_gain"):
-            if not 0 < float(i[key]) <= 20:
-                raise SystemExit(f"config: icom.{key} must be more than 0 and at most 20")
-        if not 1 <= int(i["entry_digits"]) <= 4:
-            raise SystemExit("config: icom.entry_digits must be 1-4")
-        presets = i.get("presets") or []
-        if not isinstance(presets, list) or not all(isinstance(p, dict) for p in presets):
-            raise SystemExit("config: icom.presets must be a list of {zone, number, name}")
-        for p in presets:
-            try:
-                num = int(p["number"])
-            except (KeyError, TypeError, ValueError):
-                raise SystemExit(f"config: icom.presets: {p}: needs a number (the channel's number in its zone)") from None
-            if not str(p.get("name") or "").strip():
-                raise SystemExit(f"config: icom.presets: {p}: needs a name, exactly as the radio's screen shows it")
-            if not 1 <= num < 10 ** int(i["entry_digits"]):
-                raise SystemExit(f"config: icom.presets: {p}: number must be 1 to {10 ** int(i['entry_digits']) - 1}")
-        if presets and not i["direct_entry"]:
-            raise SystemExit("config: icom.presets need icom.direct_entry (channels are typed by number)")
-        if not presets and i["direct_entry"] and int(cfg["channel"]["count"]) >= 10 ** int(i["entry_digits"]):
-            raise SystemExit("config: channel.count has more digits than icom.entry_digits")
-        if i.get("ident"):
-            try:
-                bytes.fromhex(str(i["ident"]))
-            except ValueError:
-                raise SystemExit("config: icom.ident must be hex") from None
+        i = cfg["icom"]
+        radios = i.get("radios") or []
+        if not isinstance(radios, list) or not all(isinstance(r, dict) for r in radios):
+            raise SystemExit("config: icom.radios must be a list of {name, radio_ip, presets, ...}")
+        if radios:
+            from .icom import radio_configs
+            all_ = radio_configs(i)
+            for n, r in enumerate(all_, 1):
+                if not r.get("radio_ip"):
+                    raise SystemExit(f"config: icom.radios[{n}] ({r['name']}): needs radio_ip, "
+                                     "so RadPi knows which radio is which")
+                _check_icom(r, f"icom.radios[{n}] ({r['name']})", cfg)
+            for what in ("name", "radio_ip"):
+                seen = [str(r[what]).casefold() for r in all_]
+                dup = sorted({x for x in seen if seen.count(x) > 1})
+                if dup:
+                    raise SystemExit(f"config: icom.radios: two radios with the same {what} ({', '.join(dup)})")
+        else:
+            _check_icom(i, "icom", cfg)
+        from .icom_ipmic import KEYS
+        if str(i.get("switch_key") or "none") not in (*KEYS, "none"):
+            raise SystemExit(f"config: icom.switch_key: no key {i['switch_key']!r} (keys: {', '.join(KEYS)}, or none)")
     _check_mic_head(cfg)
     if kind in ("buttons", "icom") and int(cfg["channel"]["count"]) < 1:
         raise SystemExit("config: channel.count must be >= 1")
