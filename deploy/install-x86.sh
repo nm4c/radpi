@@ -5,6 +5,8 @@
 #
 #   git clone https://github.com/nm4c/radpi ~/radpi && cd ~/radpi
 #   sudo ./deploy/install-x86.sh          (run again, or sudo ./deploy/update.sh, to update)
+#   sudo ./deploy/install-x86.sh --with-ai   also the AI agent's packages (CPU PyTorch, Whisper,
+#                                            Piper: a few GB); kept up to date on later runs
 #
 # It installs Python 3.10 or newer (AlmaLinux 9's own is too old: it adds python3.12), makes the
 # 'radio' service user, puts the program in /opt/radpi with its own Python environment, starts
@@ -18,6 +20,13 @@ DEST=/opt/radpi
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 UNIT=/etc/systemd/system/radpi.service
 
+with_ai=0
+for arg in "$@"; do
+  case "$arg" in
+    --with-ai) with_ai=1 ;;
+    *) echo "unknown option: $arg  (--with-ai)"; exit 1 ;;
+  esac
+done
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
 [[ -r /etc/os-release ]] || { echo "can't tell which Linux this is (no /etc/os-release)"; exit 1; }
 . /etc/os-release
@@ -80,7 +89,11 @@ if (( reqs_changed )); then
   "$DEST/.venv/bin/pip" install -q --upgrade pip
   "$DEST/.venv/bin/pip" install -q -r "$DEST/requirements.txt"
 fi
-[[ -e $DEST/.with-ai ]] && "$SRC/deploy/pip-ai.sh" "$DEST"   # only if the AI agent was added
+if (( with_ai )) || [[ -e $DEST/.with-ai ]]; then   # asked for now, or added before
+  echo "== the AI agent's packages (the first time is a large download, several minutes)"
+  "$SRC/deploy/pip-ai.sh" "$DEST"
+  touch "$DEST/.with-ai"
+fi
 # ---- HTTPS: a self-signed certificate until there's a real one (same files cert-cloudflare.sh writes)
 TLS=$DEST/tls
 if [[ ! -s $TLS/fullchain.pem || ! -s $TLS/privkey.pem ]]; then

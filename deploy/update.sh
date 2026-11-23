@@ -71,6 +71,7 @@ fi
 
 # An install made by install-x86.sh (a PC, not a Pi): it updates itself, with its own service file.
 if [[ "$(cat "$DEST/.platform" 2>/dev/null)" == x86 ]]; then
+  [[ $ai == on ]] && exec "$SRC/deploy/install-x86.sh" --with-ai
   exec "$SRC/deploy/install-x86.sh"
 fi
 
