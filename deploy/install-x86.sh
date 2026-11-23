@@ -96,6 +96,8 @@ fi
 chown -R radio:radio "$DEST"
 chmod 600 "$DEST/config.yaml" "$TLS/privkey.pem"
 install -m 755 "$SRC/deploy/radpi-users" /usr/local/bin/radpi-users
+# Fedora / RHEL sudo doesn't search /usr/local/bin (secure_path): link it where it does look
+[[ -e /usr/bin/radpi-users ]] || ln -s /usr/local/bin/radpi-users /usr/bin/radpi-users
 
 # ---- service: the Pi's unit, minus the Pi's gpio group (missing here, systemd won't start it),
 # and allowed to use port 443 (ports below 1024 need it; the service doesn't run as root)
