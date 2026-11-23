@@ -16,6 +16,7 @@
 #     tls_cert: /opt/radpi/tls/fullchain.pem
 #     tls_key: /opt/radpi/tls/privkey.pem
 set -euo pipefail
+renew_timer=""
 
 name="${1:-}"
 email="${2:-}"
@@ -28,8 +29,32 @@ CREDS=/etc/letsencrypt/cloudflare-radpi.ini
 HOOK=/etc/letsencrypt/renewal-hooks/deploy/radpi.sh
 
 echo "== certbot and its Cloudflare plugin"
-command -v certbot >/dev/null && dpkg -s python3-certbot-dns-cloudflare >/dev/null 2>&1 \
-  || { apt-get update -qq; apt-get install -y certbot python3-certbot-dns-cloudflare; }
+# Is the Cloudflare plugin there? (certbot lists its installed plugins)
+have_plugin() { command -v certbot >/dev/null && certbot plugins 2>/dev/null | grep -q dns-cloudflare; }
+if ! have_plugin; then
+  if command -v apt-get >/dev/null; then                 # Debian, Ubuntu, Raspberry Pi OS
+    apt-get update -qq
+    apt-get install -y certbot python3-certbot-dns-cloudflare
+  elif command -v dnf >/dev/null; then                   # Fedora; AlmaLinux / Rocky / RHEL need EPEL
+    . /etc/os-release
+    if [[ " ${ID:-} ${ID_LIKE:-} " != *" fedora "* || " ${ID:-} ${ID_LIKE:-} " == *" rhel "* ]]; then
+      rpm -q epel-release >/dev/null 2>&1 || dnf install -y epel-release
+    fi
+    dnf install -y certbot python3-certbot-dns-cloudflare
+  else
+    echo "Install certbot and its Cloudflare DNS plugin (python3-certbot-dns-cloudflare), then run this again"
+    exit 1
+  fi
+fi
+have_plugin || { echo "certbot's Cloudflare plugin still isn't available"; exit 1; }
+# Renewal: Debian and Ubuntu switch certbot's timer on when it's installed; Fedora / RHEL don't
+for t in certbot-renew.timer certbot.timer; do
+  if systemctl list-unit-files "$t" --no-legend 2>/dev/null | grep -q .; then
+    systemctl enable -q --now "$t"
+    renew_timer=$t
+    break
+  fi
+done
 
 # ---- the API token, kept root-only
 mkdir -p /etc/letsencrypt
@@ -71,7 +96,7 @@ certbot certonly --non-interactive --agree-tos "${contact[@]}" \
 RENEWED_DOMAINS="$name" RENEWED_LINEAGE="/etc/letsencrypt/live/$name" "$HOOK"
 
 echo
-echo "Done: $TLS/fullchain.pem and privkey.pem, renewed automatically (systemctl list-timers certbot)."
+echo "Done: $TLS/fullchain.pem and privkey.pem, renewed automatically${renew_timer:+ ($renew_timer)}."
 echo "In $DEST/config.yaml, under server:"
 echo "    tls_cert: $TLS/fullchain.pem"
 echo "    tls_key: $TLS/privkey.pem"
