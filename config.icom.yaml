@@ -75,6 +75,9 @@ audio:
 webrtc:
   enabled: true            # low-latency audio; browsers fall back to the WebSocket by themselves
   ice_servers: []          # over the internet behind NAT: ["stun:stun.l.google.com:19302"]
+  # Through a firewall: pin the audio to a UDP range and open/forward it (see config.example.yaml)
+  udp_ports: null          # e.g. "50100-50149" (install-x86.sh opens it in firewalld/ufw when set)
+  public_address: null     # behind a port forward: the public address or DNS name
 
 gpio:
   backend: mock            # nothing to drive on a PC

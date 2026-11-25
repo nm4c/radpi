@@ -157,6 +157,8 @@ DEFAULTS = {
         "vox_close_idle_minutes": 10,  # vox: finish the part (so it's listed) after this long quiet
     },
     "webrtc": {
+        "udp_ports": None,          # e.g. "50100-50149": audio only on these UDP ports (to forward / allow)
+        "public_address": None,     # behind a port forward: the public address or DNS name browsers use
         "enabled": True,
         "ice_servers": [],
         "rx_jitter_packets": 4,

@@ -128,13 +128,17 @@ systemctl enable -q radpi
 # ---- firewall: the radio's ports and the web port
 port="$(cd "$DEST" && sudo -u radio "$DEST/.venv/bin/python" -c \
   'from server import config; print(config.load("config.yaml")["server"]["port"])' 2>/dev/null || echo 8080)"
+# webrtc.udp_ports, if set: the range the audio uses ("50100-50149")
+rtc="$(cd "$DEST" && sudo -u radio "$DEST/.venv/bin/python" -c \
+  'from server import config, rtc; r = rtc.parse_ports(config.load("config.yaml")["webrtc"].get("udp_ports")); print(f"{r[0]}-{r[-1]}" if r else "")' 2>/dev/null || true)"
 if systemctl is-active -q firewalld 2>/dev/null; then
-  for p in 52001/tcp 50000/udp "$port/tcp"; do firewall-cmd -q --permanent --add-port="$p"; done
+  for p in 52001/tcp 50000/udp "$port/tcp" ${rtc:+$rtc/udp}; do firewall-cmd -q --permanent --add-port="$p"; done
   firewall-cmd -q --reload
-  echo "   firewalld: opened 52001/tcp, 50000/udp (the radio) and $port/tcp (the page)"
+  echo "   firewalld: opened 52001/tcp, 50000/udp (the radio), $port/tcp (the page)${rtc:+, $rtc/udp (WebRTC audio)}"
 elif command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow 52001/tcp >/dev/null; ufw allow 50000/udp >/dev/null; ufw allow "$port/tcp" >/dev/null
-  echo "   ufw: opened 52001/tcp, 50000/udp (the radio) and $port/tcp (the page)"
+  [[ -n $rtc ]] && ufw allow "${rtc/-/:}/udp" >/dev/null
+  echo "   ufw: opened 52001/tcp, 50000/udp (the radio), $port/tcp (the page)${rtc:+, $rtc/udp (WebRTC audio)}"
 fi
 
 if (( update )); then

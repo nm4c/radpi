@@ -16,6 +16,7 @@ Latency choices:
 import asyncio
 import fractions
 import logging
+import socket
 
 import numpy as np
 
@@ -49,7 +50,91 @@ def setup(cfg):
         return JitterBuffer(capacity=packets, prefetch=1)
 
     rtcrtpreceiver.JitterBuffer = jitter_buffer
+    ports = parse_ports(cfg["webrtc"].get("udp_ports"))
+    if ports:
+        _limit_ice_ports(ports)
+        log.info("WebRTC audio on UDP %d-%d", ports[0], ports[-1])
     return True
+
+
+def parse_ports(spec):
+    """webrtc.udp_ports: "50100-50149", [50100, 50149] or null -> a range, or None."""
+    if spec in (None, "", []):
+        return None
+    try:
+        lo, hi = (spec if isinstance(spec, (list, tuple)) else str(spec).replace(":", "-").split("-"))
+        lo, hi = int(lo), int(hi)
+    except (TypeError, ValueError):
+        raise SystemExit(f"config: webrtc.udp_ports: {spec!r}: give a range, e.g. 50100-50149") from None
+    if not 1024 <= lo <= hi <= 65535:
+        raise SystemExit("config: webrtc.udp_ports must be within 1024-65535, low to high")
+    return range(lo, hi + 1)
+
+
+def _limit_ice_ports(ports):
+    """Make aiortc's ICE (aioice) open its UDP sockets on ports from this range only, so a
+    firewall can forward or allow exactly those. aioice always asks for "any free port" (port 0):
+    within aioice only, that becomes the first free port of the range."""
+    import aioice.ice
+
+    class LoopProxy:
+        def __init__(self, loop):
+            self._loop = loop
+
+        def __getattr__(self, name):
+            return getattr(self._loop, name)
+
+        async def create_datagram_endpoint(self, factory, local_addr=None, **kw):
+            if not local_addr or local_addr[1] != 0:
+                return await self._loop.create_datagram_endpoint(factory, local_addr=local_addr, **kw)
+            last = None
+            for port in ports:
+                try:
+                    return await self._loop.create_datagram_endpoint(factory, local_addr=(local_addr[0], port), **kw)
+                except OSError as e:
+                    last = e
+            log.warning("WebRTC: no free UDP port left in %d-%d (raise webrtc.udp_ports)", ports[0], ports[-1])
+            raise last or OSError("no free port")
+
+    class AsyncioShim:
+        def __getattr__(self, name):
+            return getattr(asyncio, name)
+
+        def get_running_loop(self):
+            return LoopProxy(asyncio.get_running_loop())
+
+    aioice.ice.asyncio = AsyncioShim()
+
+
+async def add_public_candidates(sdp, public):
+    """webrtc.public_address (behind a port forward): next to each IPv4 host candidate, the same
+    port at the public address, so browsers outside reach the Pi through the forward while ones on
+    the local network still use the private address. public: an address or a DNS name."""
+    if not public:
+        return sdp
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(public, None, family=socket.AF_INET)
+        addr = infos[0][4][0]
+    except (OSError, IndexError) as e:
+        log.warning("webrtc.public_address %s: %s", public, e)
+        return sdp
+    from aioice.candidate import candidate_priority
+    out, added = [], set()
+    for line in sdp.split("\r\n"):
+        out.append(line)
+        if not line.startswith("a=candidate:"):
+            continue
+        f = line[len("a=candidate:"):].split()
+        # foundation component transport priority address port typ host ...
+        if len(f) < 8 or f[2].lower() != "udp" or f[7] != "host" or ":" in f[4] or f[4] == addr:
+            continue
+        if (f[1], f[5]) in added:      # same port on several interfaces: one public candidate
+            continue
+        added.add((f[1], f[5]))
+        comp = int(f[1])
+        out.append(f"a=candidate:{f[0]}p {comp} udp {candidate_priority(comp, 'srflx')} {addr} {f[5]} "
+                   f"typ srflx raddr {f[4]} rport {f[5]}")
+    return "\r\n".join(out)
 
 
 if AVAILABLE:
@@ -91,6 +176,7 @@ class RtcPeer:
         w = cfg["webrtc"]
         servers = [RTCIceServer(**s) if isinstance(s, dict) else RTCIceServer(urls=s) for s in w["ice_servers"]]
         self.pc = RTCPeerConnection(RTCConfiguration(iceServers=servers))
+        self.public = w.get("public_address")
         self.rate = int(cfg["audio"]["wire_rate"])
         self.rx = RxTrack(self.rate)
         self.pc.addTrack(self.rx)
@@ -117,7 +203,7 @@ class RtcPeer:
     async def answer(self, sdp, kind="offer"):
         await self.pc.setRemoteDescription(RTCSessionDescription(sdp=sdp, type=kind))
         await self.pc.setLocalDescription(await self.pc.createAnswer())  # waits for ICE gathering
-        return self.pc.localDescription.sdp
+        return await add_public_candidates(self.pc.localDescription.sdp, self.public)
 
     def feed(self, pcm):
         if self.ready:

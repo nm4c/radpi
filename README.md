@@ -571,6 +571,13 @@ sudo tailscale serve --bg 8080
 ```
 
 Then open `https://<pi-name>.<your-tailnet>.ts.net` on any device in your tailnet.
+**WebRTC through a firewall:** the audio travels over UDP, on random ports unless
+`webrtc.udp_ports` pins it to a range (e.g. `50100-50149`). On a Pi that has the public address
+itself (4G), allow that range in its firewall (`sudo ufw allow 50100:50149/udp`). Behind a port
+forward, forward the range (UDP) to the Pi along with the web port, and set
+`webrtc.public_address` to the public address or DNS name. Without them browsers fall back to audio
+over the WebSocket, which works but with more delay.
+
 You can also set `server.tls_cert` / `tls_key` to your own certificate. For a free, browser-trusted one
 from Let's Encrypt on a name in a Cloudflare-hosted domain, `sudo ./deploy/cert-cloudflare.sh radpi.example.com`
 gets it with a DNS challenge (no open ports needed), renews it automatically, and prints the two lines to add.

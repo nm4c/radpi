@@ -194,6 +194,13 @@ webrtc:
   # Not needed on a LAN or Tailscale (direct connection). Over the open internet behind NAT, add a STUN server:
   #   ice_servers: ["stun:stun.l.google.com:19302"]
   ice_servers: []
+  # Through a firewall: WebRTC audio uses UDP, on random ports unless udp_ports pins them down.
+  #   Pi with the public address on it (4G): allow the range in its firewall (ufw allow 50100:50149/udp).
+  #   Behind a port forward: forward the range (UDP) to the Pi as well as the web port, and set
+  #   public_address to the public address or DNS name. Each operator uses a few ports (one per
+  #   network address the machine has): 50 is plenty. Without it browsers fall back to the WebSocket.
+  udp_ports: null          # e.g. "50100-50149"
+  public_address: null     # e.g. radpi.example.com
   rx_jitter_packets: 4   # mic audio buffer on the Pi, in 20 ms packets (2, 4, 8 or 16). Smaller = lower delay
   release_ms: 120        # after PTT release, keep taking audio this long for packets still in flight
   tx_prebuffer_ms: 40    # radio-side buffer while a WebRTC operator transmits (audio.tx_prebuffer_ms is the fallback's)
